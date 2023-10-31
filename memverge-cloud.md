@@ -137,15 +137,19 @@ Before submitting jobs, you'll need to set up and configure float for your envir
    wget https://<op_center_ip_address>/float --no-check-certificate
    # Example using an IP address:
    wget https://54.81.85.209/float --no-check-certificate
+
    ```
+
+Or you can choose to open MMCloud OpCenter and download it with GUI.
 
 ### **4.2 Move and Grant Execution Rights to Float:**
   - For MAC user
    ```bash
    sudo mv float /usr/local/bin/
    sudo chmod +x /usr/local/bin/float
+   alias float = /path/to/float_binary/float
    ```
-  - For Linux/HPC user (Also add `export PATH=$PATH:<PATH>` in your `~/.bashrc` and don't forget to source it)
+  - For Linux user (Also add `export PATH=$PATH:<PATH>` in your `~/.bashrc` and don't forget to source it), there is a firewall issue on our HPC, so we can not login to float on HPC, the resolution for now is that we can submit data on through HPC, and submit commands/scripts locally (on your laptop or desktop)
   ```
   chmod +x <PATH>/float 
   ```
@@ -154,8 +158,8 @@ Before submitting jobs, you'll need to set up and configure float for your envir
 If you are using a Mac, float might be blocked due to your security settings. Follow these steps to address it:
 
    - Open 'System Preferences'.
-   - Navigate to 'Security & Privacy'.
-   - Under the 'General' tab, you'll see a message about Float being blocked. Click on 'Allow' or any similar option that grants permission.
+   - Navigate to 'Privacy & Security '.
+   - Under the 'Security' tab, you'll see a message about Float being blocked. Click on 'Allow Anyway'.
 
 ### **4.4 Rename Float to Avoid Name Conflicts (Optional For Mac Users, but would change your float name in downstream instruction and the future work):**
 
@@ -171,9 +175,9 @@ If there's an existing application or command named `float`, rename the download
 Use the username `admin` and password `memverge`:
 
    ```bash
-   float login -a /<op_center_ip_address>
+   mmfloat login -a /<op_center_ip_address>
    # Example using an IP address:
-   float login -u admin -p memverge -a 54.81.85.209
+   mmfloat login -u admin -p memverge -a 54.81.85.209
    ```
 
 ### **4.6 Create and Execute Float Submit Commands:**

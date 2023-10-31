@@ -1,0 +1,4 @@
+path	parent	name	id	synapseStore	contentType	used	executed	activityName	activityDescription
+/mnt/vast/hpc/csg/rf2872/data/protocal_data/phenotype/protocol_example.protein.bed.gz.tbi	syn52473736	protocol_example.protein.bed.gz.tbi	syn52473954	True	application/octet-stream				
+/mnt/vast/hpc/csg/rf2872/data/protocal_data/phenotype/protocol_example.protein.region_list.txt	syn52473736	protocol_example.protein.region_list.txt	syn52503586	True	text/plain				
+/mnt/vast/hpc/csg/rf2872/data/protocal_data/phenotype/protocol_example.protein.bed.gz	syn52473736	protocol_example.protein.bed.gz	syn52473953	True	text/tab-separated-values				
