@@ -172,12 +172,27 @@ If there's an existing application or command named `float`, rename the download
 
 ### **4.5 Log in to Float:**
 
+There are two ways to login to Float: as admin or as a regular user. 
+
 Use the username `admin` and password `memverge`:
 
    ```bash
    mmfloat login -a /<op_center_ip_address>
    # Example using an IP address:
    mmfloat login -u admin -p memverge -a 54.81.85.209
+   ```
+Create a new user for example `tom` and password `memverge`
+
+   ```bash
+    mmfloat user add tom
+    New password:
+    confirm password:
+   ```
+Login as the new user `tom`
+
+   ```bash
+   # Example login as Tom to the Opcenter with IP address:
+   mmfloat login -u tom -p memverge -a 54.81.85.209
    ```
 
 ### **4.6 Create and Execute Float Submit Commands:**
