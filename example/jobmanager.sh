@@ -83,7 +83,7 @@ running_jobs() {
 run_job() {
     log "$@"
     $@ | tee -a $LOG
-    sed -i .orig '1d' $JOBFILE.pending
+    sed -i'.orig' '1d' $JOBFILE.pending
     echo "$@" >> $JOBFILE.processed
 }
 
