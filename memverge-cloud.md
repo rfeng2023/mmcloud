@@ -2,7 +2,7 @@
 
 Section 1 is for admin to help create IAW accounts for users and section 2 for users to login and run the jobs. Given the container is used, the software installation and set up for MAC/Linux/Windows is shown in the last appendix section.
 
-## **1. Instruction for admin **
+## **1. Instruction for admin**
 ### **1.1 Setting Up Your IAW User and Account (For admin)**
 #### **FIXME:1.1 From memverge: this one-time job and don't need to do it every time (through GUI), there should be an admin to setup and manage it, after that, researchers and students only need to create a folder under that bucket**
 #### FIXME: for now I gave every one in the group the full access to the whole bucket, so everyone can read and edit others' file, that would be monvenient but also dangerous
