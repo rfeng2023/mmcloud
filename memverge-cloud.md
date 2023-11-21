@@ -55,7 +55,7 @@ Section 1 is for admin to help create IAW accounts for users and section 2 for u
     - Region: `us-east-1`.
     - Output format (e.g., `yaml`).
 
-#### **1.1.2 Create an S3 Bucket (For admin)**
+#### **1.2 Create an S3 Bucket (For admin)**
 The cumc-gao bucket already exists, don't need to create more, for users just need to use this bucket to do their work.
 To create an S3 bucket, ensure your `$S3_BUCKET` name is globally unique and in lowercase. For example:
 ```bash
@@ -69,7 +69,7 @@ Those steps below for amin and users are the same, except for the 2.3.1 float lo
 
 ### **2.1. Create S3 Storage Resource and Upload Data to AWS**
 - The installation and set up of AWS CLI tools is shown in the appendix section.
-- User's aws account will be created by admin in section 1, the bucket cumc-gao is already created, so users only need to use and upload their data to the <bucket>/<uni>. 
+- User's aws account will be created by admin in section 1, the bucket cumc-gao is already created, so users only need to use and upload their data to the `<bucket>/<uni>`. 
 
 - First in your teminal, configure your aws account with your access key and secret access key, and set up your region and output format.
 - Configure AWS CLI:
@@ -268,8 +268,8 @@ Or you can choose to open MMCloud OpCenter and download it with GUI.
   ```
   chmod +x <PATH>/float 
   ```
-  - For Windows user
-   Files located in C:\Windows\System32 are automatically included in the system's PATH environment variable on Windows. This means that any executable file in this directory can be run from any location in the Command Prompt without specifying the full path to the executable. The System32 directory is a crucial part of the Windows operating system, containing many of its core files and utilities. So, if float.exe is in this directory, you can run it from anywhere in the Command Prompt by just typing `float`.
+  - For Windows user:
+Files located in C:\Windows\System32 are automatically included in the system's PATH environment variable on Windows. This means that any executable file in this directory can be run from any location in the Command Prompt without specifying the full path to the executable. The System32 directory is a crucial part of the Windows operating system, containing many of its core files and utilities. So, if float.exe is in this directory, you can run it from anywhere in the Command Prompt by just typing `float`.
 
 
 #### **3.2.3 Addressing Mac Security Settings (Optional: For Mac Users):**
