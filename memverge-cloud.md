@@ -64,7 +64,7 @@ aws s3api create-bucket --bucket $S3_BUCKET --region $AWS_REGION
 aws s3api create-bucket --bucket cumc-gao --region us-east-1
 ```
 
-## **2. For users **
+## **2. Instruction or users**
 Those steps below for amin and users are the same, except for the 2.3.1 float login one command, admin use `admin` and users use their own username and password.
 
 ### **2.1. Create S3 Storage Resource and Upload Data to AWS**
