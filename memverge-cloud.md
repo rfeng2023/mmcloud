@@ -55,7 +55,7 @@ Section 1 is for admin to help create IAW accounts for users and section 2 for u
     - Region: `us-east-1`.
     - Output format (e.g., `yaml`).
 
-#### **1.2 Create an S3 Bucket (For admin)**
+### **1.2 Create an S3 Bucket (For admin)**
 The cumc-gao bucket already exists, don't need to create more, for users just need to use this bucket to do their work.
 To create an S3 bucket, ensure your `$S3_BUCKET` name is globally unique and in lowercase. For example:
 ```bash
