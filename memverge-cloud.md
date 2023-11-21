@@ -213,7 +213,7 @@ aws s3 rm s3://cumc-gao/test/ --recursive
 ```
 
 
-## **3. Appendix: Software Installation and Set Up
+## **3. Appendix: Software Installation and Set Up**
 ### **3.1 Download AWS CLI tools**
     (Linux/Windows/Mac) https://docs.aws.amazon.com/cli/latest/userguide/gteting-started-install.html
    - If you are **Mac** user, you can use below commands to install AWS CLI tools.
