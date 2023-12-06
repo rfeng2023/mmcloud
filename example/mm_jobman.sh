@@ -30,6 +30,7 @@ c_value=2
 m_value=16
 mountOpt=""
 image=""
+image_run=""
 dryrun=false
 declare -a mount_local=()
 declare -a mount_remote=()
@@ -140,7 +141,7 @@ create_download_commands() {
         cmd+="mkdir -p '$destination' && "
 
         # Add AWS download command
-        cmd+="aws s3 cp 's3://$source' '$destination' --recursive --quiet"
+        cmd+="/opt/aws/dist/aws s3 sync 's3://$source' '$destination'"
         cmd+=" && "
     done
 
@@ -157,8 +158,11 @@ create_upload_commands() {
         local source="${upload_local[$i]}"
         local destination="${upload_remote[$i]}"
 
+        # Add mkdir command
+        cmd+="mkdir -p '$source' && "
+
         # Add AWS upload command
-        cmd+="aws s3 cp '$source' 's3://$destination' --recursive --quiet"
+        cmd+="/opt/aws/dist/aws s3 sync '$source' 's3://$destination'"
         cmd+=" && "
     done
 
@@ -186,7 +190,7 @@ submit_each_line_with_mmfloat() {
 
     # Construct dataVolume parameters
     for i in "${!mount_local[@]}"; do
-        dataVolume_params+="--dataVolume '[$mountOpt]s3://${mount_remote[$i]}:${mount_local[$i]}' "
+        dataVolume_params+="--dataVolume '[$mountOpt]:${mount_local[$i]}' "
     done
 
 
@@ -208,20 +212,30 @@ submit_each_line_with_mmfloat() {
         if [ "$dryrun" = true ]; then
             full_cmd+="#-------------\n"
         fi
-        cmd="$download_cmd$line$upload_cmd" 
-        full_cmd+="mmfloat submit -i '$image' -j <(echo -e '''$cmd''') -c '$c_value' -m '$m_value' $dataVolume_params\n"
+
+        image_run=$(echo $line | awk '{print $3}')
+	subline+="mkdir -p /home/jovyan/TEMP/output && "
+        subline+=$(echo $line | awk '{ print substr($0, index($0,$4)) }')
+
+        #cmd="$download_cmd$subline$upload_cmd"
+	echo "$download_cmd$subline$upload_cmd" > test.sh 
+        #full_cmd+="mmfloat submit -i '$image' -j <(echo -e '''$cmd''') -c '$c_value' -m '$m_value' $dataVolume_params\n"
+        full_cmd+="float submit -i '$image_run' -j test.sh -c '$c_value' -m '$m_value' $dataVolume_params\n"
+
+        # Remove the last '\n'
+        full_cmd=${full_cmd%\\n}
+
+        # Execute or echo the full command
+        if [ "$dryrun" = true ]; then
+            echo -e "${full_cmd}"  # Replace '&&' with new lines for dry run
+        else
+            eval "$full_cmd"
+        fi
+
+	dataVolume_params=""
+	subline=""
  
     done < "$script_file"
-
-    # Remove the last '\n'
-    full_cmd=${full_cmd%\\n}
-
-    # Execute or echo the full command
-    if [ "$dryrun" = true ]; then
-        echo -e "${full_cmd}"  # Replace '&&' with new lines for dry run
-    else
-        eval "$full_cmd"
-    fi
 }
 
 main() {
