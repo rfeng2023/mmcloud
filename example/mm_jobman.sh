@@ -230,11 +230,14 @@ submit_each_line_with_mmfloat() {
             full_cmd+="#-------------\n"
         fi
 
+        # Gao add-on to make sure micromamba properly pick up environment
+        export_cmd="export PATH=/opt/conda/bin:/opt/conda/condabin:/opt/aws/dist:\$PATH \
+                    && export MAMBA_ROOT_PREFIX='/opt/conda' && "
+
         # Initialize shell for micromamba
-        entrypoint_cmd="eval \$(micromamba shell hook --shell=bash) && "
+        entrypoint_cmd="eval '\$(micromamba shell hook --shell bash)' && "
         # Activate environment with entrypoint in job script
         entrypoint_cmd+="$entrypoint && "
-        deactivate_cmd=" && micromamba deactivate "
 
         # Remove entrypoint command from line
         subline=$(echo "$line" | sed 's/--entrypoint "[^"]*"//')
@@ -242,8 +245,11 @@ submit_each_line_with_mmfloat() {
         # cd into working directory in the job script
         cwd_cmd="cd '$cwd' && "
 
+        # Comand to deactivate env
+        deactivate_cmd=" && micromamba deactivate "
+
         # MMC job submission
-        cmd="$download_cmd$entrypoint_cmd$cwd_cmd$subline$deactivate_cmd$upload_cmd"
+        cmd="$download_cmd$export_cmd$entrypoint_cmd$cwd_cmd$subline$deactivate_cmd$upload_cmd"
         #full_cmd+="mmfloat submit -i '$image' -j <(echo -e '''$cmd''') -c '$c_value' -m '$m_value' $dataVolume_params\n"
         full_cmd+="float submit -i '$image' -j <(echo -e '''$cmd''') -c '$c_value' -m '$m_value' $dataVolume_params\n"
 
@@ -255,6 +261,7 @@ submit_each_line_with_mmfloat() {
         if [ "$dryrun" = true ]; then
             echo -e "${full_cmd}"  # Replace '&&' with new lines for dry run
         else
+            # TODO: Float login?
             eval "$full_cmd"
         fi
  
