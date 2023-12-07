@@ -14,7 +14,9 @@ show_help() {
     echo "  --image <value>              Docker image to use (required)"
     echo "  --mountOpt <value>           Mount options (required)"
     echo "  --opcenter <value>           Opcenter address (required)"
+    echo "  --entrypoint '<command>'     Entrypoint command in the form of 'micromamba activate env' (required)"
     echo "  --dryrun                     If applied, will print all commands instead of running any."
+    echo "  --cwd '<value>'              Specified working directory (default: /home/ec2-user)"
     echo "  --help                       Show this help message"
 }
 
@@ -30,7 +32,6 @@ c_value=2
 m_value=16
 mountOpt=""
 image=""
-image_run=""
 dryrun=false
 declare -a mount_local=()
 declare -a mount_remote=()
@@ -39,6 +40,8 @@ declare -a download_remote=()
 declare -a upload_local=()
 declare -a upload_remote=()
 opcenter=""
+entrypoint=""
+cwd="/home/ec2-user"
 
 while (( "$#" )); do
   case "$1" in
@@ -80,6 +83,14 @@ while (( "$#" )); do
       opcenter="$2"
       shift 2
       ;;
+   --entrypoint)
+      entrypoint="$2"
+      shift 2
+      ;;
+   --cwd)
+      cwd="$2"
+      shift 2
+      ;;
    --dryrun)
       dryrun=true
       shift
@@ -116,6 +127,10 @@ check_required_params() {
         missing_params+="--opcenter, "
         is_missing=true
     fi
+    if [ -z "$entrypoint" ]; then
+        missing_params+="--entrypoint, "
+        is_missing=true
+    fi
     if [ ${#mount_local[@]} -eq 0 ]; then
         missing_params+="--mount, "
         is_missing=true
@@ -141,7 +156,7 @@ create_download_commands() {
         cmd+="mkdir -p '$destination' && "
 
         # Add AWS download command
-        cmd+="/opt/aws/dist/aws s3 sync 's3://$source' '$destination'"
+        cmd+="aws s3 sync 's3://$source' '$destination'"
         cmd+=" && "
     done
 
@@ -158,11 +173,13 @@ create_upload_commands() {
         local source="${upload_local[$i]}"
         local destination="${upload_remote[$i]}"
 
-        # Add mkdir command
-        cmd+="mkdir -p '$source' && "
+        # Add mkdir command for source folder if dne
+        if [ ! -d "$source" ]; then
+          cmd+="mkdir -p '$source' && "
+        fi
 
         # Add AWS upload command
-        cmd+="/opt/aws/dist/aws s3 sync '$source' 's3://$destination'"
+        cmd+="aws s3 sync '$source' 's3://$destination'"
         cmd+=" && "
     done
 
@@ -185,7 +202,7 @@ submit_each_line_with_mmfloat() {
     fi
     if [ ${#upload_local[@]} -ne 0 ]; then
         upload_cmd=$(create_upload_commands)
-	upload_cmd=" && $upload_cmd\n"
+	      upload_cmd=" && $upload_cmd\n"
     fi
 
     # Construct dataVolume parameters
@@ -200,10 +217,10 @@ submit_each_line_with_mmfloat() {
         return 1
     fi
 
-    local full_cmd=""
-
     # Loop through each line of the script file
     while IFS= read -r line; do
+        full_cmd=""
+
         if [ -z "$line" ]; then
             continue  # Skip empty lines
         fi
@@ -213,17 +230,26 @@ submit_each_line_with_mmfloat() {
             full_cmd+="#-------------\n"
         fi
 
-        image_run=$(echo $line | awk '{print $3}')
-	subline+="mkdir -p /home/jovyan/TEMP/output && "
-        subline+=$(echo $line | awk '{ print substr($0, index($0,$4)) }')
+        # Initialize shell for micromamba
+        entrypoint_cmd="eval \$(micromamba shell hook --shell=bash) && "
+        # Activate environment with entrypoint in job script
+        entrypoint_cmd+="$entrypoint && "
+        deactivate_cmd=" && micromamba deactivate "
 
-        #cmd="$download_cmd$subline$upload_cmd"
-	echo "$download_cmd$subline$upload_cmd" > test.sh 
+        # Remove entrypoint command from line
+        subline=$(echo "$line" | sed 's/--entrypoint "[^"]*"//')
+
+        # cd into working directory in the job script
+        cwd_cmd="cd '$cwd' && "
+
+        # MMC job submission
+        cmd="$download_cmd$entrypoint_cmd$cwd_cmd$subline$deactivate_cmd$upload_cmd"
         #full_cmd+="mmfloat submit -i '$image' -j <(echo -e '''$cmd''') -c '$c_value' -m '$m_value' $dataVolume_params\n"
-        full_cmd+="float submit -i '$image_run' -j test.sh -c '$c_value' -m '$m_value' $dataVolume_params\n"
+        full_cmd+="float submit -i '$image' -j <(echo -e '''$cmd''') -c '$c_value' -m '$m_value' $dataVolume_params\n"
 
         # Remove the last '\n'
         full_cmd=${full_cmd%\\n}
+        echo $full_cmd
 
         # Execute or echo the full command
         if [ "$dryrun" = true ]; then
@@ -231,9 +257,6 @@ submit_each_line_with_mmfloat() {
         else
             eval "$full_cmd"
         fi
-
-	dataVolume_params=""
-	subline=""
  
     done < "$script_file"
 }
@@ -248,6 +271,8 @@ main() {
         echo "#mountOpt value: $mountOpt"
         echo "#image value: $image"
         echo "#opcenter value: $opcenter"
+        echo "#entrypoint value: $entrypoint"
+        echo "#cwd value: $cwd"
         echo "#commands to run:"
     fi
     # Call submit_each_line_with_mmfloat
