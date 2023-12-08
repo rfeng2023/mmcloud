@@ -9,6 +9,7 @@ show_help() {
     echo "  -c <value>                   Number of CPUs (default: 2)"
     echo "  -m <value>                   Amount of memory (default: 16)"
     echo "  --mount <local>:<remote>     Mount local directory to remote (required)"
+    echo "  --env [<key>=<val>]          Set environmental variables for the job (optional)"
     echo "  --download <local>:<remote>  Download from S3 (optional)"
     echo "  --upload <local>:<remote>    Upload to S3 (optional)"
     echo "  --image <value>              Docker image to use (required)"
@@ -42,6 +43,7 @@ declare -a upload_remote=()
 opcenter=""
 entrypoint=""
 cwd="/home/ec2-user"
+env=""
 
 while (( "$#" )); do
   case "$1" in
@@ -89,6 +91,10 @@ while (( "$#" )); do
       ;;
    --cwd)
       cwd="$2"
+      shift 2
+      ;;
+   --env)
+      env="$2"
       shift 2
       ;;
    --dryrun)
@@ -202,7 +208,7 @@ submit_each_line_with_mmfloat() {
     fi
     if [ ${#upload_local[@]} -ne 0 ]; then
         upload_cmd=$(create_upload_commands)
-	      upload_cmd=" && $upload_cmd\n"
+	      upload_cmd=" && $upload_cmd"
     fi
 
     # Construct dataVolume parameters
@@ -229,13 +235,13 @@ submit_each_line_with_mmfloat() {
         if [ "$dryrun" = true ]; then
             full_cmd+="#-------------\n"
         fi
-
-        # Gao add-on to make sure micromamba properly pick up environment
-        export_cmd="export PATH=/opt/conda/bin:/opt/conda/condabin:/opt/aws/dist:\$PATH \
-                    && export MAMBA_ROOT_PREFIX='/opt/conda' && "
+    
+        # set runner
+        runner="#!/bin/bash\n"
+        # runner="#!/usr/local/bin/_entrypoint.sh\n"
 
         # Initialize shell for micromamba
-        entrypoint_cmd="eval '\$(micromamba shell hook --shell bash)' && "
+        entrypoint_cmd="eval \"\$(micromamba shell hook --shell bash)\" && "
         # Activate environment with entrypoint in job script
         entrypoint_cmd+="$entrypoint && "
 
@@ -249,13 +255,13 @@ submit_each_line_with_mmfloat() {
         deactivate_cmd=" && micromamba deactivate "
 
         # MMC job submission
-        cmd="$download_cmd$export_cmd$entrypoint_cmd$cwd_cmd$subline$deactivate_cmd$upload_cmd"
+        cmd="$runner$download_cmd$entrypoint_cmd$cwd_cmd$subline$deactivate_cmd$upload_cmd"
         #full_cmd+="mmfloat submit -i '$image' -j <(echo -e '''$cmd''') -c '$c_value' -m '$m_value' $dataVolume_params\n"
-        full_cmd+="float submit -i '$image' -j <(echo -e '''$cmd''') -c '$c_value' -m '$m_value' $dataVolume_params\n"
+        full_cmd+="float submit -i '$image' -j <(echo -e '''$cmd''') -c '$c_value' -m '$m_value' $dataVolume_params --env '$env'\n"
 
         # Remove the last '\n'
         full_cmd=${full_cmd%\\n}
-        echo $full_cmd
+        # echo -e $full_cmd
 
         # Execute or echo the full command
         if [ "$dryrun" = true ]; then
@@ -280,6 +286,7 @@ main() {
         echo "#opcenter value: $opcenter"
         echo "#entrypoint value: $entrypoint"
         echo "#cwd value: $cwd"
+        echo "#env values: $env"
         echo "#commands to run:"
     fi
     # Call submit_each_line_with_mmfloat
