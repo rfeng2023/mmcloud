@@ -207,6 +207,25 @@ create_upload_commands() {
     echo "$cmd"
 }
 
+generate_parallel_commands() {
+  local job_commands=$1
+  paralleled=""
+  
+  IFS=$'\n' read -d '' -ra array <<< "$(echo "$job_commands" | grep -o -E "'([^']+)'")"
+  local start=0
+  substring=""
+  while [ $start -lt ${#array[@]} ]; do
+      local end=$((start + parallel_commands))
+      substring+="parallel ::: "
+      for ((i = start; i < end && i < ${#array[@]}; i++)); do
+          substring+="${array[i]} "
+      done
+      start=$end
+      substring+=" && "
+  done
+  echo -e $substring
+}
+
 submit_each_line_with_mmfloat() {
     local script_file="$1"
     local download_cmd=""
@@ -238,39 +257,28 @@ submit_each_line_with_mmfloat() {
     # Read all lines from the script file into an array
     all_commands=""
     total_commands=0
-    parallel_index=$parallel_commands
     while IFS= read -r line; do
         if [ -z "$line" ]; then
             continue  # Skip empty lines
         fi
-        all_commands+="$line"
-        if (( parallel_index > 1)); then
-          all_commands+=" |\n"
-          parallel_index=$(( parallel_index - 1 ))
-        else
-          parallel_index=$parallel_commands
-          all_commands+=" &&\n"
-        fi
+        all_commands+="'$line'\n"
         total_commands=$(( total_commands + 1))  
     done < "$script_file"
     all_commands=${all_commands%\\n}
 
     # Divide the commands into jobs based on job-size
     num_jobs=$(( ($total_commands + $job_size - 1) / $job_size )) # Ceiling division
-    
     # Loop to create job submission commands
     for (( j = 1; j < $num_jobs + 1; j++ )); do
         full_cmd=""
-
         # Using a sliding-window effect, take the next job_size number of jobs
         start=$((($j - 1) * $job_size + 1))
         end=$(($start + $job_size - 1))
         job_commands=$(echo -e "$all_commands" | sed -n "$start,${end}p")
-        job_commands=${job_commands%&&}
-        job_commands=${job_commands%|}
-        
-        # Determine how many commands to run in parallel
-        # By default, they all run in sequence - need to replace with |
+
+        # Extract commands to use with `parallel`
+        paralleled=$(generate_parallel_commands "$job_commands")
+        paralleled=${paralleled%&&}
 
         # Add the mmfloat submit command for each line
         if [ "$dryrun" = true ]; then
@@ -286,7 +294,11 @@ submit_each_line_with_mmfloat() {
         entrypoint_cmd+="$entrypoint && "
 
         # Remove entrypoint command from line
-        subline=$(echo "$job_commands" | sed 's/--entrypoint "[^"]*"//')
+        subline=$(echo "$paralleled" | sed 's/--entrypoint "[^"]*"//g')
+
+        # Replacing single quotes with double quotes
+        # Because job script submitted removes single quotes
+        subline=${subline//\'/\"}
 
         # cd into working directory in the job script
         cwd_cmd="cd '$cwd' && "
@@ -300,6 +312,7 @@ submit_each_line_with_mmfloat() {
 
         # Remove the last '\n'
         full_cmd=${full_cmd%\\n}
+        # echo "------------------------"
         # echo -e $full_cmd
 
         # Execute or echo the full command
