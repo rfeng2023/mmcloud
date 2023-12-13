@@ -16,6 +16,8 @@ show_help() {
     echo "  --mountOpt <value>           Mount options (required)"
     echo "  --opcenter <value>           Opcenter address (required)"
     echo "  --entrypoint '<command>'     Entrypoint command in the form of 'micromamba activate env' (required)"
+    echo "  --job-size                   Divides the number of jobs to create VMs (default: 1)"
+    echo "  --parallel-commands          Sets how many commands to run in parallel (default: 1)" 
     echo "  --dryrun                     If applied, will print all commands instead of running any."
     echo "  --cwd '<value>'              Specified working directory (default: /home/ec2-user)"
     echo "  --help                       Show this help message"
@@ -44,6 +46,8 @@ opcenter=""
 entrypoint=""
 cwd="/home/ec2-user"
 env=""
+job_size=1
+parallel_commands=1
 
 while (( "$#" )); do
   case "$1" in
@@ -95,6 +99,14 @@ while (( "$#" )); do
       ;;
    --env)
       env="$2"
+      shift 2
+      ;;
+   --job-size)
+      job_size="$2"
+      shift 2
+      ;;
+   --parallel-commands)
+      parallel_commands="$2"
       shift 2
       ;;
    --dryrun)
@@ -195,6 +207,25 @@ create_upload_commands() {
     echo "$cmd"
 }
 
+generate_parallel_commands() {
+  local job_commands=$1
+  paralleled=""
+  
+  IFS=$'\n' read -d '' -ra array <<< "$(echo "$job_commands" | grep -o -E "'([^']+)'")"
+  local start=0
+  substring=""
+  while [ $start -lt ${#array[@]} ]; do
+      local end=$((start + parallel_commands))
+      substring+="parallel ::: "
+      for ((i = start; i < end && i < ${#array[@]}; i++)); do
+          substring+="${array[i]} "
+      done
+      start=$end
+      substring+=" && "
+  done
+  echo -e $substring
+}
+
 submit_each_line_with_mmfloat() {
     local script_file="$1"
     local download_cmd=""
@@ -223,22 +254,39 @@ submit_each_line_with_mmfloat() {
         return 1
     fi
 
-    # Loop through each line of the script file
+    # Read all lines from the script file into an array
+    all_commands=""
+    total_commands=0
     while IFS= read -r line; do
-        full_cmd=""
-
         if [ -z "$line" ]; then
             continue  # Skip empty lines
         fi
+        all_commands+="'$line'\n"
+        total_commands=$(( total_commands + 1))  
+    done < "$script_file"
+    all_commands=${all_commands%\\n}
+
+    # Divide the commands into jobs based on job-size
+    num_jobs=$(( ($total_commands + $job_size - 1) / $job_size )) # Ceiling division
+    # Loop to create job submission commands
+    for (( j = 1; j < $num_jobs + 1; j++ )); do
+        full_cmd=""
+        # Using a sliding-window effect, take the next job_size number of jobs
+        start=$((($j - 1) * $job_size + 1))
+        end=$(($start + $job_size - 1))
+        job_commands=$(echo -e "$all_commands" | sed -n "$start,${end}p")
+
+        # Extract commands to use with `parallel`
+        paralleled=$(generate_parallel_commands "$job_commands")
+        paralleled=${paralleled%&&}
 
         # Add the mmfloat submit command for each line
         if [ "$dryrun" = true ]; then
             full_cmd+="#-------------\n"
         fi
     
-        # set runner
+        # Set runner
         runner="#!/bin/bash\n"
-        # runner="#!/usr/local/bin/_entrypoint.sh\n"
 
         # Initialize shell for micromamba
         entrypoint_cmd="eval \"\$(micromamba shell hook --shell bash)\" && "
@@ -246,7 +294,11 @@ submit_each_line_with_mmfloat() {
         entrypoint_cmd+="$entrypoint && "
 
         # Remove entrypoint command from line
-        subline=$(echo "$line" | sed 's/--entrypoint "[^"]*"//')
+        subline=$(echo "$paralleled" | sed 's/--entrypoint "[^"]*"//g')
+
+        # Replacing single quotes with double quotes
+        # Because job script submitted removes single quotes
+        subline=${subline//\'/\"}
 
         # cd into working directory in the job script
         cwd_cmd="cd '$cwd' && "
@@ -256,11 +308,11 @@ submit_each_line_with_mmfloat() {
 
         # MMC job submission
         cmd="$runner$download_cmd$entrypoint_cmd$cwd_cmd$subline$deactivate_cmd$upload_cmd"
-        #full_cmd+="mmfloat submit -i '$image' -j <(echo -e '''$cmd''') -c '$c_value' -m '$m_value' $dataVolume_params\n"
         full_cmd+="float submit -i '$image' -j <(echo -e '''$cmd''') -c '$c_value' -m '$m_value' $dataVolume_params --env '$env'\n"
 
         # Remove the last '\n'
         full_cmd=${full_cmd%\\n}
+        # echo "------------------------"
         # echo -e $full_cmd
 
         # Execute or echo the full command
@@ -271,7 +323,7 @@ submit_each_line_with_mmfloat() {
             eval "$full_cmd"
         fi
  
-    done < "$script_file"
+    done 
 }
 
 main() {
@@ -287,6 +339,8 @@ main() {
         echo "#entrypoint value: $entrypoint"
         echo "#cwd value: $cwd"
         echo "#env values: $env"
+        echo "#job-size: $job_size"
+        echo "#parallel-commands: $parallel_commands"
         echo "#commands to run:"
     fi
     # Call submit_each_line_with_mmfloat
