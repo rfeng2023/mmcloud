@@ -250,7 +250,6 @@ submit_each_line_with_mmfloat() {
         dataVolume_params+="--dataVolume '[$mountOpt]:${mount_local[$i]}' "
     done
 
-
     # Check if the script file exists
     if [ ! -f "$script_file" ]; then
         echo "Script file does not exist: $script_file"
@@ -287,12 +286,10 @@ submit_each_line_with_mmfloat() {
         if [ "$dryrun" = true ]; then
             full_cmd+="#-------------\n"
         fi
-    
-        # Remove entrypoint command from line
-        subline=$(echo "$paralleled" | sed 's/--entrypoint "[^"]*"//g')
 
         # Replacing single quotes with double quotes
         # Because job script submitted removes single quotes
+        subline=$(echo "$paralleled")
         subline=${subline//\'/\"}
 
         # Set heredoc
