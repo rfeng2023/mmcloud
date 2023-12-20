@@ -8,16 +8,17 @@ show_help() {
     echo "Options:"
     echo "  -c <value>                   Number of CPUs (default: 2)"
     echo "  -m <value>                   Amount of memory (default: 16)"
-    echo "  --mount <local>:<remote>     Mount local directory to remote (required)"
+    echo "  --mount <local>:<remote>     Mount local directory to remote (optional)"
     echo "  --env [<key>=<val>]          Set environmental variables for the job (optional)"
     echo "  --download <local>:<remote>  Download from S3 (optional)"
     echo "  --upload <local>:<remote>    Upload to S3 (optional)"
     echo "  --image <value>              Docker image to use (required)"
     echo "  --mountOpt <value>           Mount options (required)"
     echo "  --opcenter <value>           Opcenter address (required)"
-    echo "  --entrypoint '<command>'     Entrypoint command in the form of 'micromamba activate env' (required)"
+    echo "  --entrypoint '<command>'     Entrypoint command. First command run in job script (required)"
     echo "  --job-size                   Divides the number of jobs to create VMs (default: 1)"
     echo "  --parallel-commands          Sets how many commands to run in parallel (default: 1)" 
+    echo "  --imageVolSize               Define image volume size in GB (default depends on image size). "
     echo "  --dryrun                     If applied, will print all commands instead of running any."
     echo "  --cwd '<value>'              Specified working directory (default: /home/ec2-user)"
     echo "  --help                       Show this help message"
@@ -48,6 +49,7 @@ cwd="/home/ec2-user"
 env=""
 job_size=1
 parallel_commands=1
+imageVolSize=""
 
 while (( "$#" )); do
   case "$1" in
@@ -107,6 +109,10 @@ while (( "$#" )); do
       ;;
    --parallel-commands)
       parallel_commands="$2"
+      shift 2
+      ;;
+   --imageVolSize)
+      imageVolSize="$2"
       shift 2
       ;;
    --dryrun)
@@ -171,17 +177,16 @@ create_download_commands() {
         local destination="${download_local[$i]}"
 
         # Add mkdir command
-        cmd+="mkdir -p '$destination' && "
+        cmd+="mkdir -p '$destination'\n"
 
         # Add AWS download command
-        cmd+="aws s3 sync 's3://$source' '$destination'"
-        cmd+=" && "
+        cmd+="aws s3 sync 's3://$source' '$destination'\n"
     done
 
-    # Remove the last ' && '
-    cmd=${cmd% && }
+    # Remove the last '\n'
+    cmd=${cmd%\\n}
 
-    echo "$cmd"
+    echo -e "$cmd"
 }
 
 
@@ -193,18 +198,18 @@ create_upload_commands() {
 
         # Add mkdir command for source folder if dne
         if [ ! -d "$source" ]; then
-          cmd+="mkdir -p '$source' && "
+          cmd+="mkdir -p '$source'\n"
         fi
 
         # Add AWS upload command
         cmd+="aws s3 sync '$source' 's3://$destination'"
-        cmd+=" && "
+        cmd+="\n"
     done
 
-    # Remove the last ' && '
-    cmd=${cmd% && }
+    # Remove the last '\n'
+    cmd=${cmd%\\n}
 
-    echo "$cmd"
+    echo -e "$cmd"
 }
 
 generate_parallel_commands() {
@@ -221,7 +226,7 @@ generate_parallel_commands() {
           substring+="${array[i]} "
       done
       start=$end
-      substring+=" && "
+      substring+=" \n"
   done
   echo -e $substring
 }
@@ -235,18 +240,15 @@ submit_each_line_with_mmfloat() {
     # Only create download and upload commands if there are corresponding parameters
     if [ ${#download_local[@]} -ne 0 ]; then
         download_cmd=$(create_download_commands)
-        download_cmd+=" && "
     fi
     if [ ${#upload_local[@]} -ne 0 ]; then
         upload_cmd=$(create_upload_commands)
-	      upload_cmd=" && $upload_cmd"
     fi
 
     # Construct dataVolume parameters
     for i in "${!mount_local[@]}"; do
         dataVolume_params+="--dataVolume '[$mountOpt]:${mount_local[$i]}' "
     done
-
 
     # Check if the script file exists
     if [ ! -f "$script_file" ]; then
@@ -284,36 +286,42 @@ submit_each_line_with_mmfloat() {
         if [ "$dryrun" = true ]; then
             full_cmd+="#-------------\n"
         fi
-    
-        # Set runner
-        runner="#!/bin/bash\n"
-
-        # Initialize shell for micromamba
-        entrypoint_cmd="eval \"\$(micromamba shell hook --shell bash)\" && "
-        # Activate environment with entrypoint in job script
-        entrypoint_cmd+="$entrypoint && "
-
-        # Remove entrypoint command from line
-        subline=$(echo "$paralleled" | sed 's/--entrypoint "[^"]*"//g')
 
         # Replacing single quotes with double quotes
         # Because job script submitted removes single quotes
+        subline=$(echo "$paralleled")
         subline=${subline//\'/\"}
 
-        # cd into working directory in the job script
-        cwd_cmd="cd '$cwd' && "
+        # Set heredoc
+        tee myjob.sh << EOF
+#!/bin/bash
 
-        # Comand to deactivate env
-        deactivate_cmd=" && micromamba deactivate "
+# Activate environment with entrypoint in job script
+set -o errexit -o pipefail
+${entrypoint}
 
-        # MMC job submission
-        cmd="$runner$download_cmd$entrypoint_cmd$cwd_cmd$subline$deactivate_cmd$upload_cmd"
-        full_cmd+="float submit -i '$image' -j <(echo -e '''$cmd''') -c '$c_value' -m '$m_value' $dataVolume_params --env '$env'\n"
+# Download Command
+${download_cmd}
 
-        # Remove the last '\n'
-        full_cmd=${full_cmd%\\n}
-        # echo "------------------------"
-        # echo -e $full_cmd
+# cd into working directory in the job script
+cd ${cwd}
+
+# Job Command
+${subline}
+
+# Upload Command
+${upload_cmd}
+
+EOF
+        full_cmd+="float submit -i '$image' -j myjob.sh -c $c_value -m $m_value $dataVolume_params"
+
+        # Additional float cli parameters
+        if [[ ! -z '$env' ]]; then
+          full_cmd+=" --env $env"
+        fi
+        if [[ ! -z '$imageVolSize' ]]; then
+          full_cmd+=" --imageVolSize $imageVolSize"
+        fi
 
         # Execute or echo the full command
         if [ "$dryrun" = true ]; then
