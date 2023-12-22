@@ -346,8 +346,8 @@ EOF
         # Execute or echo the full command
         if [ "$dryrun" = true ]; then
             echo -e "${full_cmd}"  # Replace '&&' with new lines for dry run
-        # else
-        #     eval "$full_cmd"
+        else
+            eval "$full_cmd"
         fi
  
     done 
