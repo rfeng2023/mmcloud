@@ -8,7 +8,7 @@ show_help() {
     echo "Options:"
     echo "  -c <value>                   Number of CPUs (default: 2)"
     echo "  -m <value>                   Amount of memory (default: 16)"
-    echo "  --mount <local>:<remote>     Mount local directory to remote (optional)"
+    echo "  --mount <bucket>:<local>     Mount bucket to a local directory(optional)"
     echo "  --env [<key>=<val>]          Set environmental variables for the job (optional)"
     echo "  --download <local>:<remote>  Download from S3 (optional)"
     echo "  --upload <local>:<remote>    Upload to S3 (optional)"
@@ -45,7 +45,7 @@ declare -a upload_local=()
 declare -a upload_remote=()
 opcenter=""
 entrypoint=""
-cwd="/home/ec2-user"
+cwd="~"
 env=""
 job_size=1
 parallel_commands=1
@@ -75,8 +75,8 @@ while (( "$#" )); do
       while [ $# -gt 0 ] && [[ $1 != -* ]]; do
         IFS=':' read -ra PARTS <<< "$1"
         if [ "$current_flag" == "--mount" ]; then
-          mount_local+=("${PARTS[0]}")
-          mount_remote+=("${PARTS[1]}")
+          mount_local+=("${PARTS[1]}")
+          mount_remote+=("${PARTS[0]}")
         elif [ "$current_flag" == "--download" ]; then
           download_local+=("${PARTS[0]}")
           download_remote+=("${PARTS[1]}")
@@ -247,7 +247,7 @@ submit_each_line_with_mmfloat() {
 
     # Construct dataVolume parameters
     for i in "${!mount_local[@]}"; do
-        dataVolume_params+="--dataVolume '[$mountOpt]:${mount_local[$i]}' "
+        dataVolume_params+="--dataVolume '[$mountOpt]s3://${mount_remote[$i]}:${mount_local[$i]}' "
     done
 
     # Check if the script file exists
@@ -327,7 +327,6 @@ EOF
         if [ "$dryrun" = true ]; then
             echo -e "${full_cmd}"  # Replace '&&' with new lines for dry run
         else
-            # TODO: Float login?
             eval "$full_cmd"
         fi
  
