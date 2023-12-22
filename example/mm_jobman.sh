@@ -20,7 +20,7 @@ show_help() {
     echo "  --parallel-commands          Sets how many commands to run in parallel (default: 1)" 
     echo "  --imageVolSize               Define image volume size in GB (default depends on image size). "
     echo "  --dryrun                     If applied, will print all commands instead of running any."
-    echo "  --cwd '<value>'              Specified working directory (default: /home/ec2-user)"
+    echo "  --cwd '<value>'              Specified working directory (default: ~)"
     echo "  --help                       Show this help message"
 }
 
