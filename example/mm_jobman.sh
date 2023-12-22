@@ -17,7 +17,7 @@ show_help() {
     echo "  --opcenter <value>           Opcenter address (required)"
     echo "  --entrypoint '<command>'     Entrypoint command. First command run in job script (required)"
     echo "  --job-size                   Divides the number of jobs to create VMs (default: 1)"
-    echo "  --parallel-commands          Sets how many commands to run in parallel (default: 1)" 
+    echo "  --parallel-commands          Sets how many commands to run in parallel (default: number of cpus)" 
     echo "  --imageVolSize               Define image volume size in GB (default depends on image size). "
     echo "  --dryrun                     If applied, will print all commands instead of running any."
     echo "  --cwd '<value>'              Specified working directory (default: ~)"
@@ -48,13 +48,14 @@ entrypoint=""
 cwd="~"
 env=""
 job_size=1
-parallel_commands=1
+parallel_commands=c_value
 imageVolSize=""
 
 while (( "$#" )); do
   case "$1" in
     -c)
       c_value="$2"
+      parallel_commands=c_value
       shift 2
       ;;
     -m)
@@ -214,19 +215,30 @@ create_upload_commands() {
 
 generate_parallel_commands() {
   local job_commands=$1
-  paralleled=""
   
   IFS=$'\n' read -d '' -ra array <<< "$(echo "$job_commands" | grep -o -E "'([^']+)'")"
   local start=0
-  substring=""
+  substring=''
+
   while [ $start -lt ${#array[@]} ]; do
       local end=$((start + parallel_commands))
-      substring+="parallel ::: "
+      # If parallel_commands is 1, or if only one remainder command,
+      # No need for `parallel`
+      end_val=${#array[@]}
+      if [ $parallel_commands -ne 1 ] && [ $((end_val - start)) -ne 1 ]; then
+        substring+='parallel ::: '
+      fi
       for ((i = start; i < end && i < ${#array[@]}; i++)); do
-          substring+="${array[i]} "
+          # No quotation marks if it is a singular command
+          if [ $parallel_commands -ne 1 ] && [ $((end_val - start)) -ne 1 ]; then
+            substring+="${array[i]}"
+          else
+            # Marker for single commands, as should not have quotes later
+            substring+="<${array[i]}>"
+          fi
       done
       start=$end
-      substring+=" \n"
+      substring+=' \n'
   done
   echo -e $substring
 }
@@ -291,9 +303,17 @@ submit_each_line_with_mmfloat() {
         # Because job script submitted removes single quotes
         subline=$(echo "$paralleled")
         subline=${subline//\'/\"}
+        # If no `parallel` in the line, no need for any quotation marks
+        # as it a singular command
+        # Use < > markers to remove quotation marks
+        subline=${subline//\<\"/}
+        subline=${subline//\">/}
+
+        echo "----------------"
+        echo "$subline"
 
         # Set heredoc
-        tee myjob.sh << EOF
+        cat << EOF > myjob.sh
 #!/bin/bash
 
 # Activate environment with entrypoint in job script
@@ -326,8 +346,8 @@ EOF
         # Execute or echo the full command
         if [ "$dryrun" = true ]; then
             echo -e "${full_cmd}"  # Replace '&&' with new lines for dry run
-        else
-            eval "$full_cmd"
+        # else
+        #     eval "$full_cmd"
         fi
  
     done 
