@@ -51,7 +51,7 @@ env=""
 job_size=1
 parallel_commands=$c_value
 imageVolSize=""
-no_fail="set -o errexit -o pipefail"
+no_fail="|| break"
 
 while (( "$#" )); do
   case "$1" in
@@ -119,7 +119,7 @@ while (( "$#" )); do
       shift 2
       ;;
    --no-fail-fast)
-      no_fail=""
+      no_fail="|| true"
       shift 
       ;;
    --dryrun)
@@ -327,19 +327,30 @@ submit_each_line_with_mmfloat() {
         job_script=$(cat << EOF
 #!/bin/bash
 
-${no_fail}
+set -o errexit -o pipefail
+
 # Activate environment with entrypoint in job script
 ${entrypoint}
-# mkdir commands from --upload and --download
+
+# Create directories if they don't exist for download and upload
 ${download_mkdir}
 ${upload_mkdir}
-# Download Command
+
+# Execute the download commands to fetch data from S3
 ${download_cmd}
-# cd into working directory in the job script
+
+# Change to the specified working directory
 cd ${cwd}
-# Job Command
-${subline}
-# Upload Command
+
+# Execute job commands. Behavior controlled by no_fail variable.
+{
+    IFS=$'\n'
+    for command in ${subline}; do
+        eval \$command $no_fail
+    done
+}
+
+# Always execute the upload commands to upload data to S3
 ${upload_cmd}
 
 EOF
