@@ -329,7 +329,6 @@ submit_each_line_with_mmfloat() {
 #!/bin/bash
 
 set -o errexit -o pipefail
-
 # Activate environment with entrypoint in job script
 ${entrypoint}
 
@@ -348,7 +347,6 @@ cd ${cwd}
 if [[ "$no_fail" == *true* ]]; then
     set +o errexit +o pipefail
 fi
-set +o errexit +o pipefail
 {
     IFS=$'\n'
     while IFS= read -r command; do
