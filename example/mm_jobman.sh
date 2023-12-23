@@ -323,32 +323,35 @@ submit_each_line_with_mmfloat() {
         subline=${subline//\<\"/}
         subline=${subline//\">/}
 
-        # Set heredoc
-        cat << EOF > myjob.sh
+        # Create the job script using heredoc
+        job_script=$(cat << EOF
 #!/bin/bash
 
-# Activate environment with entrypoint in job script
 ${no_fail}
+# Activate environment with entrypoint in job script
 ${entrypoint}
-
 # mkdir commands from --upload and --download
 ${download_mkdir}
 ${upload_mkdir}
-
 # Download Command
 ${download_cmd}
-
 # cd into working directory in the job script
 cd ${cwd}
-
 # Job Command
 ${subline}
-
 # Upload Command
 ${upload_cmd}
 
 EOF
-        full_cmd+="float submit -i '$image' -j myjob.sh -c $c_value -m $m_value $dataVolume_params"
+)
+        if [ "$dryrun" = true ]; then
+            # If dryrun is true, create a physical temporary file
+            echo "$job_script" > dryrun_mmjob_example.sh
+            full_cmd+="float submit -i '$image' -j dryrun_mmjob_example.sh -c $c_value -m $m_value $dataVolume_params"
+        else
+            # Otherwise, use an in-memory file descriptor
+            full_cmd+="float submit -i '$image' -j <(echo \"$job_script\") -c $c_value -m $m_value $dataVolume_params"
+        fi
 
         # Additional float cli parameters
         if [[ ! -z '$env' ]]; then
