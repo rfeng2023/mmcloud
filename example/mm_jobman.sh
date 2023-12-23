@@ -232,9 +232,10 @@ generate_parallel_commands() {
       # No need for `parallel`
       end_val=${#array[@]}
       if [ $parallel_commands -ne 1 ] && [ $((end_val - start)) -ne 1 ]; then
-        substring+='parallel ::: '
+        substring+='parallel :::'
       fi
       for ((i = start; i < end && i < ${#array[@]}; i++)); do
+	  substring+=" "
           # No quotation marks if it is a singular command
           if [ $parallel_commands -ne 1 ] && [ $((end_val - start)) -ne 1 ]; then
             substring+="${array[i]}"
@@ -244,7 +245,7 @@ generate_parallel_commands() {
           fi
       done
       start=$end
-      substring+=' \n'
+      substring+='\n'
   done
   echo -e $substring
 }
@@ -342,8 +343,11 @@ ${download_cmd}
 # Change to the specified working directory
 cd ${cwd}
 
-# Execute job commands. 
-# Temporarily disable exit on error. Behavior controlled by no_fail variable.
+# Execute job commands.
+# Check if no_fail contains 'true' and temporarily disable exit on error and pipefail
+if [[ "$no_fail" == *true* ]]; then
+    set +o errexit +o pipefail
+fi
 set +o errexit +o pipefail
 {
     IFS=$'\n'
@@ -351,8 +355,10 @@ set +o errexit +o pipefail
         eval \$command $no_fail
     done
 }
-# Re-enable exit on error
-set -o errexit -o pipefail
+# Re-enable exit on error and pipefail if they were disabled
+if [[ "$no_fail" == *true* ]]; then
+    set -o errexit -o pipefail
+fi
 
 # Always execute the upload commands to upload data to S3
 ${upload_cmd}
@@ -361,8 +367,8 @@ EOF
 )
         if [ "$dryrun" = true ]; then
             # If dryrun is true, create a physical temporary file
-            echo "$job_script" > dryrun_mmjob_example.sh
-            full_cmd+="float submit -i '$image' -j dryrun_mmjob_example.sh -c $c_value -m $m_value $dataVolume_params"
+	    echo "$job_script" > ${script_file%.*}_"$j".mmjob.sh 
+            full_cmd+="float submit -i '$image' -j ${script_file%.*}_"$j".mmjob.sh -c $c_value -m $m_value $dataVolume_params"
         else
             # Otherwise, use an in-memory file descriptor
             full_cmd+="float submit -i '$image' -j <(echo \"$job_script\") -c $c_value -m $m_value $dataVolume_params"
