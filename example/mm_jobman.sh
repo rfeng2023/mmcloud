@@ -21,6 +21,7 @@ show_help() {
     echo "  --imageVolSize               Define image volume size in GB (default depends on image size). "
     echo "  --dryrun                     If applied, will print all commands instead of running any."
     echo "  --cwd '<value>'              Specified working directory (default: ~)"
+    echo "  --no-fail-fast               Does not use 'set -o errexit -o pipefail' line"
     echo "  --help                       Show this help message"
 }
 
@@ -50,6 +51,7 @@ env=""
 job_size=1
 parallel_commands=c_value
 imageVolSize=""
+no_fail="set -o errexit -o pipefail"
 
 while (( "$#" )); do
   case "$1" in
@@ -115,6 +117,10 @@ while (( "$#" )); do
    --imageVolSize)
       imageVolSize="$2"
       shift 2
+      ;;
+   --no-fail-fast)
+      no_fail=""
+      shift 
       ;;
    --dryrun)
       dryrun=true
@@ -322,7 +328,7 @@ submit_each_line_with_mmfloat() {
 #!/bin/bash
 
 # Activate environment with entrypoint in job script
-set -o errexit -o pipefail
+${no_fail}
 ${entrypoint}
 
 # mkdir commands from --upload and --download
@@ -355,8 +361,8 @@ EOF
         # Execute or echo the full command
         if [ "$dryrun" = true ]; then
             echo -e "${full_cmd}"  # Replace '&&' with new lines for dry run
-        else
-            eval "$full_cmd"
+        # else
+        #     eval "$full_cmd"
         fi
  
     done 
