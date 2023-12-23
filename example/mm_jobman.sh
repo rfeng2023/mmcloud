@@ -49,7 +49,7 @@ entrypoint=""
 cwd="~"
 env=""
 job_size=1
-parallel_commands=c_value
+parallel_commands=$c_value
 imageVolSize=""
 no_fail="set -o errexit -o pipefail"
 
@@ -57,7 +57,7 @@ while (( "$#" )); do
   case "$1" in
     -c)
       c_value="$2"
-      parallel_commands=c_value
+      parallel_commands=$c_value
       shift 2
       ;;
     -m)
