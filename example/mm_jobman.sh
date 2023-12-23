@@ -248,6 +248,8 @@ submit_each_line_with_mmfloat() {
     local download_cmd=""
     local upload_cmd=""
     local dataVolume_params=""
+    local download_mkdir=""
+    local upload_mkdir=""
 
     # Only create download and upload commands if there are corresponding parameters
     if [ ${#download_local[@]} -ne 0 ]; then
@@ -256,6 +258,12 @@ submit_each_line_with_mmfloat() {
     if [ ${#upload_local[@]} -ne 0 ]; then
         upload_cmd=$(create_upload_commands)
     fi
+
+    # Grab the mkdir commands
+    download_mkdir="$(echo -e "$download_cmd" | grep 'mkdir')"
+    upload_mkdir+=$(echo -e "$upload_cmd" | grep 'mkdir')
+    download_cmd=$(echo "$download_cmd" | grep -v 'mkdir')
+    upload_cmd=$(echo "$upload_cmd" | grep -v 'mkdir')
 
     # Construct dataVolume parameters
     for i in "${!mount_local[@]}"; do
@@ -309,9 +317,6 @@ submit_each_line_with_mmfloat() {
         subline=${subline//\<\"/}
         subline=${subline//\">/}
 
-        echo "----------------"
-        echo "$subline"
-
         # Set heredoc
         cat << EOF > myjob.sh
 #!/bin/bash
@@ -319,6 +324,10 @@ submit_each_line_with_mmfloat() {
 # Activate environment with entrypoint in job script
 set -o errexit -o pipefail
 ${entrypoint}
+
+# mkdir commands from --upload and --download
+${download_mkdir}
+${upload_mkdir}
 
 # Download Command
 ${download_cmd}
