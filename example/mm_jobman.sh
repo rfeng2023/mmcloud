@@ -351,9 +351,9 @@ fi
 set +o errexit +o pipefail
 {
     IFS=$'\n'
-    for command in ${subline}; do
-        eval \$command $no_fail
-    done
+    while IFS= read -r command; do
+        eval "$command" $no_fail
+    done <<< "${subline}"
 }
 # Re-enable exit on error and pipefail if they were disabled
 if [[ "$no_fail" == *true* ]]; then
