@@ -342,13 +342,17 @@ ${download_cmd}
 # Change to the specified working directory
 cd ${cwd}
 
-# Execute job commands. Behavior controlled by no_fail variable.
+# Execute job commands. 
+# Temporarily disable exit on error. Behavior controlled by no_fail variable.
+set +o errexit +o pipefail
 {
     IFS=$'\n'
     for command in ${subline}; do
         eval \$command $no_fail
     done
 }
+# Re-enable exit on error
+set -o errexit -o pipefail
 
 # Always execute the upload commands to upload data to S3
 ${upload_cmd}
