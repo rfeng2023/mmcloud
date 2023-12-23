@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+
+# Modified from https://raw.githubusercontent.com/kirankumbhar/File-Transfer-FTP-to-S3-Python/master/ftp_to_s3.py
+# Ru Feng, 2023
+
 import math
 import time
 import io

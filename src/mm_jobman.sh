@@ -1,31 +1,28 @@
 #!/bin/bash
 # Gao Wang and MemVerge Inc.
 
-# mm_jobman.sh
-
 # Help function
 show_help() {
     echo "Usage: $0 [options] <script>"
     echo "Options:"
-    echo "  -c <value>                   Number of CPUs (default: 2)"
-    echo "  -m <value>                   Amount of memory (default: 16)"
-    echo "  --mount <bucket>:<local>     Mount bucket to a local directory(optional)"
-    echo "  --env [<key>=<val>]          Set environmental variables for the job (optional)"
-    echo "  --download <local>:<remote>  Download from S3 (optional)"
-    echo "  --upload <local>:<remote>    Upload to S3 (optional)"
-    echo "  --image <value>              Docker image to use (required)"
-    echo "  --mountOpt <value>           Mount options (required)"
-    echo "  --opcenter <value>           Opcenter address (required)"
-    echo "  --entrypoint '<command>'     Entrypoint command. First command run in job script (required)"
-    echo "  --job-size                   Divides the number of jobs to create VMs (default: 1)"
-    echo "  --parallel-commands          Sets how many commands to run in parallel (default: number of cpus)" 
-    echo "  --imageVolSize               Define image volume size in GB (default depends on image size). "
-    echo "  --dryrun                     If applied, will print all commands instead of running any."
-    echo "  --cwd '<value>'              Specified working directory (default: ~)"
-    echo "  --no-fail-fast               Does not use 'set -o errexit -o pipefail' line"
-    echo "  --help                       Show this help message"
+    echo "  -c <value>                   Specify the number of CPUs to use (default and recommended for AWS Spot Instances: 2)."
+    echo "  -m <value>                   Set the amount of memory in GB (default: 16)."
+    echo "  --cwd <value>                Define the working directory for the job (default: ~)."
+    echo "  --download <local>:<remote>  Download files from S3. Format: <local path>:<S3 path> (optional)."
+    echo "  --upload <local>:<remote>    Upload files to S3. Format: <local path>:<S3 path> (optional)."
+    echo "  --dryrun                     Execute a dry run, printing commands without running them."
+    echo "  --entrypoint '<command>'     Set the initial command to run in the job script (required)."
+    echo "  --env <key>=<val>            Set environmental variables for the job in the format KEY=VALUE (optional)."
+    echo "  --image <value>              Specify the Docker image to use for the job (required)."
+    echo "  --imageVolSize <value>       Define the size of the image volume in GB (depends on the size of input image)."
+    echo "  --job-size <value>           Set the number of commands per job for creating virtual machines (default: 2)."
+    echo "  --mount <bucket>:<local>     Mount an S3 bucket to a local directory. Format: <bucket>:<local path> (optional)."
+    echo "  --mountOpt <value>           Specify mount options for the job (required)."
+    echo "  --no-fail-fast               Continue executing subsequent commands even if one fails."
+    echo "  --opcenter <value>           Provide the Opcenter address for the job (required)."
+    echo "  --parallel-commands <value>  Set the number of commands to run in parallel (default: number of CPUs)."
+    echo "  --help                       Show this help message."
 }
-
 
 # Check if at least one argument is provided
 if [ "$#" -eq 0 ]; then
@@ -34,6 +31,7 @@ if [ "$#" -eq 0 ]; then
 fi
 
 # Initialize variables for options with default values
+# CPU = 2 is a good default for AWS Spot instances
 c_value=2
 m_value=16
 mountOpt=""
@@ -46,10 +44,10 @@ declare -a download_remote=()
 declare -a upload_local=()
 declare -a upload_remote=()
 opcenter=""
-entrypoint=""
+entrypoint="date"
 cwd="~"
 env=""
-job_size=1
+job_size=2
 parallel_commands=$c_value
 imageVolSize=""
 no_fail="|| break"
@@ -185,10 +183,10 @@ create_download_commands() {
         local destination="${download_local[$i]}"
 
         # Add mkdir command
-        cmd+="mkdir -p '$destination'\n"
+        cmd+="mkdir -p $destination\n"
 
         # Add AWS download command
-        cmd+="aws s3 sync 's3://$source' '$destination'\n"
+        cmd+="aws s3 sync s3://$source $destination\n"
     done
 
     # Remove the last '\n'
@@ -197,7 +195,6 @@ create_download_commands() {
     echo -e "$cmd"
 }
 
-
 create_upload_commands() {
     local cmd=""
     for i in "${!upload_local[@]}"; do
@@ -205,12 +202,10 @@ create_upload_commands() {
         local destination="${upload_remote[$i]}"
 
         # Add mkdir command for source folder if dne
-        if [ ! -d "$source" ]; then
-          cmd+="mkdir -p '$source'\n"
-        fi
+        cmd+="mkdir -p $source\n"
 
         # Add AWS upload command
-        cmd+="aws s3 sync '$source' 's3://$destination'"
+        cmd+="aws s3 sync $source s3://$destination"
         cmd+="\n"
     done
 
@@ -236,7 +231,7 @@ generate_parallel_commands() {
         substring+='parallel :::'
       fi
       for ((i = start; i < end && i < ${#array[@]}; i++)); do
-	  substring+=" "
+	      substring+=" "
           # No quotation marks if it is a singular command
           if [ $parallel_commands -ne 1 ] && [ $((end_val - start)) -ne 1 ]; then
             substring+="${array[i]}"
@@ -255,9 +250,15 @@ submit_each_line_with_mmfloat() {
     local script_file="$1"
     local download_cmd=""
     local upload_cmd=""
-    local dataVolume_params=""
     local download_mkdir=""
     local upload_mkdir=""
+    local dataVolume_params=""
+
+    # Check if the script file exists
+    if [ ! -f "$script_file" ]; then
+        echo "Script file does not exist: $script_file"
+        return 1
+    fi
 
     # Only create download and upload commands if there are corresponding parameters
     if [ ${#download_local[@]} -ne 0 ]; then
@@ -267,22 +268,17 @@ submit_each_line_with_mmfloat() {
         upload_cmd=$(create_upload_commands)
     fi
 
-    # Grab the mkdir commands
-    download_mkdir="$(echo -e "$download_cmd" | grep 'mkdir')"
-    upload_mkdir+=$(echo -e "$upload_cmd" | grep 'mkdir')
-    download_cmd=$(echo "$download_cmd" | grep -v 'mkdir')
-    upload_cmd=$(echo "$upload_cmd" | grep -v 'mkdir')
+    # Separate out the mkdir commands
+    download_mkdir=$(echo -e "$download_cmd" | grep 'mkdir')
+    upload_mkdir=$(echo -e "$upload_cmd" | grep 'mkdir')
+    # Remove mkdir commands from the original command
+    download_cmd=$(echo -e "$download_cmd" | grep -v 'mkdir')
+    upload_cmd=$(echo -e "$upload_cmd" | grep -v 'mkdir')
 
     # Construct dataVolume parameters
     for i in "${!mount_local[@]}"; do
         dataVolume_params+="--dataVolume '[$mountOpt]s3://${mount_remote[$i]}:${mount_local[$i]}' "
     done
-
-    # Check if the script file exists
-    if [ ! -f "$script_file" ]; then
-        echo "Script file does not exist: $script_file"
-        return 1
-    fi
 
     # Read all lines from the script file into an array
     all_commands=""
@@ -317,7 +313,7 @@ submit_each_line_with_mmfloat() {
 
         # Replacing single quotes with double quotes
         # Because job script submitted removes single quotes
-        subline=$(echo "$paralleled")
+        subline=$(echo -e "$paralleled")
         subline=${subline//\'/\"}
         # If no `parallel` in the line, no need for any quotation marks
         # as it a singular command
@@ -349,10 +345,9 @@ if [[ "$no_fail" == *true* ]]; then
     set +o errexit +o pipefail
 fi
 {
-    IFS=$'\n'
     while IFS= read -r command; do
-        eval "$command" $no_fail
-    done <<< "${subline}"
+        eval \$command $no_fail
+    done <<< '''${subline}'''
 }
 # Re-enable exit on error and pipefail if they were disabled
 if [[ "$no_fail" == *true* ]]; then
@@ -365,13 +360,13 @@ ${upload_cmd}
 EOF
 )
         if [ "$dryrun" = true ]; then
-            # If dryrun is true, create a physical temporary file
-	    echo "$job_script" > ${script_file%.*}_"$j".mmjob.sh 
-            full_cmd+="float submit -i '$image' -j ${script_file%.*}_"$j".mmjob.sh -c $c_value -m $m_value $dataVolume_params"
+            job_filename=${script_file%.*}_"$j".mmjob.sh 
         else
-            # Otherwise, use an in-memory file descriptor
-            full_cmd+="float submit -i '$image' -j <(echo \"$job_script\") -c $c_value -m $m_value $dataVolume_params"
+            mkdir -p ${TMPDIR:-/tmp}/${script_file%.*}
+            job_filename=${TMPDIR:-/tmp}/${script_file%.*}/$j.mmjob.sh
         fi
+        printf "$job_script" > $job_filename 
+        full_cmd+="float submit -i '$image' -j $job_filename -c $c_value -m $m_value $dataVolume_params"
 
         # Additional float cli parameters
         if [[ ! -z '$env' ]]; then
@@ -383,11 +378,11 @@ EOF
 
         # Execute or echo the full command
         if [ "$dryrun" = true ]; then
-            echo -e "${full_cmd}"  # Replace '&&' with new lines for dry run
+            echo -e "${full_cmd}"
         else
             eval "$full_cmd"
+            rm -rf ${TMPDIR:-/tmp}/${script_file%.*}
         fi
- 
     done 
 }
 
@@ -408,13 +403,7 @@ main() {
         echo "#parallel-commands: $parallel_commands"
         echo "#commands to run:"
     fi
-    # Call submit_each_line_with_mmfloat
-    if [ -f "$SCRIPT_NAME" ]; then
-        submit_each_line_with_mmfloat "$SCRIPT_NAME"
-    else
-        echo "Error: Script file not found: $SCRIPT_NAME"
-        exit 1
-    fi
+    submit_each_line_with_mmfloat "$SCRIPT_NAME"
 }
 
 main
