@@ -201,12 +201,21 @@ create_upload_commands() {
         local source="${upload_local[$i]}"
         local destination="${upload_remote[$i]}"
 
-        # Add mkdir command for source folder if dne
-        cmd+="mkdir -p $source\n"
+        if [[ ${upload_local[$i]} =~ /$ ]]; then
+            # Add mkdir command for source folder if dne
+            cmd+="mkdir -p $source\n"
+            # Add AWS upload command
+            cmd+="aws s3 sync $source s3://$destination"
+            cmd+="\n"
+        else
+            local last_folder=$(basename "$source")
+            # Add mkdir command for source folder if dne
+            cmd+="mkdir -p $source\n"
+            # Add AWS upload command
+            cmd+="aws s3 sync $source s3://$destination/$last_folder"
+            cmd+="\n"
+        fi
 
-        # Add AWS upload command
-        cmd+="aws s3 sync $source s3://$destination"
-        cmd+="\n"
     done
 
     # Remove the last '\n'
