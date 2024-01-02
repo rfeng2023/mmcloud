@@ -34,7 +34,7 @@ fi
 # CPU = 2 is a good default for AWS Spot instances
 c_value=2
 m_value=16
-mountOpt=""
+declare -a mountOpt=()
 image=""
 dryrun=false
 declare -a mount_local=()
@@ -64,8 +64,12 @@ while (( "$#" )); do
       shift 2
       ;;
     --mountOpt)
-      mountOpt="$2"
-      shift 2
+      shift
+      while [ $# -gt 0 ] && [[ $1 != -* ]]; do
+        IFS='' read -ra MOUNT <<< "$1"
+        mountOpt+=("${MOUNT[0]}")
+        shift
+      done
       ;;
     --image)
       image="$2"
@@ -255,6 +259,31 @@ generate_parallel_commands() {
   echo -e $substring
 }
 
+mount_buckets() {
+  local dataVolume_cmd=""
+
+  # If just one mount option, use the same one for all bucket mounting
+  if [ ${#mountOpt[@]} -eq 1 ]; then
+    for i in "${!mount_local[@]}"; do
+        dataVolume_cmd+="--dataVolume '[$mountOpt]s3://${mount_remote[$i]}:${mount_local[$i]}' "
+    done
+
+  # If more than one mount option, we expect there to be the same number of mounted buckets
+  else
+    if [ ${#mountOpt[@]} -eq  ${#mount_local[@]} ]; then
+      for i in "${!mountOpt[@]}"; do
+            dataVolume_cmd+="--dataVolume '[${mountOpt[$i]}]s3://${mount_remote[$i]}:${mount_local[$i]}' "
+      done
+    else
+      # Number of mountOptions > 1 and dne number of buckets
+      echo -e "\n[ERROR] If there are multiple mount options, please provide the same number of mount options and same number of buckets\n"
+      exit 1
+    fi
+  fi
+
+  echo -e $dataVolume_cmd
+}
+
 submit_each_line_with_mmfloat() {
     local script_file="$1"
     local download_cmd=""
@@ -284,10 +313,8 @@ submit_each_line_with_mmfloat() {
     download_cmd=$(echo -e "$download_cmd" | grep -v 'mkdir')
     upload_cmd=$(echo -e "$upload_cmd" | grep -v 'mkdir')
 
-    # Construct dataVolume parameters
-    for i in "${!mount_local[@]}"; do
-        dataVolume_params+="--dataVolume '[$mountOpt]s3://${mount_remote[$i]}:${mount_local[$i]}' "
-    done
+    # Mount bucket(s) with provided mount options
+    dataVolume_params=$(mount_buckets)
 
     # Read all lines from the script file into an array
     all_commands=""
