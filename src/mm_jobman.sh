@@ -50,7 +50,7 @@ env=""
 job_size=2
 parallel_commands=$c_value
 imageVolSize=""
-no_fail="|| break"
+no_fail="|| { command_failed=1; break; }"
 
 while (( "$#" )); do
   case "$1" in
@@ -339,24 +339,22 @@ ${download_cmd}
 # Change to the specified working directory
 cd ${cwd}
 
-# Execute job commands.
-# Check if no_fail contains 'true' and temporarily disable exit on error and pipefail
-if [[ "$no_fail" == *true* ]]; then
-    set +o errexit +o pipefail
-fi
+# Initialize a flag to track command success
+# which can be changed in $no_fail
+command_failed=0
 {
     while IFS= read -r command; do
         eval \$command $no_fail
     done <<< '''${subline}'''
 }
-# Re-enable exit on error and pipefail if they were disabled
-if [[ "$no_fail" == *true* ]]; then
-    set -o errexit -o pipefail
-fi
 
 # Always execute the upload commands to upload data to S3
 ${upload_cmd}
 
+# Check if any command failed
+if [ \$command_failed -eq 1 ]; then
+    exit 1
+fi
 EOF
 )
         if [ "$dryrun" = true ]; then
@@ -388,7 +386,6 @@ EOF
 
 main() {
     check_required_params
-    # Print some information to debug writting this script
     if [ "$dryrun" = true ]; then
         echo "#Processing script: $SCRIPT_NAME"
         echo "#c value: $c_value"
