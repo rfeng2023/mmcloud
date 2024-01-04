@@ -203,7 +203,7 @@ create_upload_commands() {
     local cmd=""
     for i in "${!upload_local[@]}"; do
         local source="${upload_local[$i]}"
-        local destination="${upload_remote[$i]}"
+        local destination="${upload_remote[$i]%/}"
 
         if [[ ${upload_local[$i]} =~ /$ ]]; then
             # Add mkdir command for source folder if dne
