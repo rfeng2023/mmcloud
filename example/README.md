@@ -31,7 +31,6 @@ Here,
 
 - `-c 2` and `-m 16` specifies that the VM should have 2 CPU threads and 16GB of memory.
 - `--job-size 100` will split commands per line within `commands_to_submit.txt` into batches, each batch has at most 100 commands.
-- `` 
 - `--mount` includes two folders: the AWS folder `s3://statfungen/ftp_fgc_xql` is mounted to the VM as `~/data`; the AWS folder `s3://statfungen/ftp_fgc_xqtl/sos_cache/aw3600` is mounted to the VM as `~/.sos`.
 - `--mountOpts` specifies "mode=r" for the first folder that mounts it as read-only to the analysis command. That means the analysis command cannot directly change or add anything to `~/data` folder in the VM. The second folder is mounted with "mode=rw", that is, the analysis command can write into the `~/.sos` folder in the VM.
 - `--env`, `--entrypoint`, `--image` and  `--imageVolSize` options are specific to how our docker image `ghcr.io/cumc/pecotmr_docker` is configured to work with the VM.  
