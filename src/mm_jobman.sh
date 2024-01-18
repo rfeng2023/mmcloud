@@ -221,7 +221,7 @@ create_download_commands() {
       if [[ ${download_remote[$i]} =~ /$ ]]; then
         download_cmd+="mkdir -p ${download_local[$i]}\n"
       fi
-        download_cmd+="aws s3 cp s3://${download_remote[$i]} ${download_local[$i]}\n"
+        download_cmd+="aws s3 cp s3://${download_remote[$i]} ${download_local[$i]} --recursive\n"
     done
   fi
 
