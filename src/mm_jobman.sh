@@ -8,8 +8,10 @@ show_help() {
     echo "  -c <value>                   Specify the number of CPUs to use (default and recommended for AWS Spot Instances: 2)."
     echo "  -m <value>                   Set the amount of memory in GB (default: 16)."
     echo "  --cwd <value>                Define the working directory for the job (default: ~)."
-    echo "  --download <local>:<remote>  Download files from S3. Format: <local path>:<S3 path> (optional)."
+    echo "  --download <remote>:<local>  Download files from S3. Format: <local path>:<S3 path> (optional)."
     echo "  --upload <local>:<remote>    Upload files to S3. Format: <local path>:<S3 path> (optional)."
+    echo "  --downloadOpt '<value>'      Include or exclude values for download, separated by ',' (optional)."
+    echo "  --uploadOpt '<value>'        Include or exclude values for upload, separated by ',' (optional)."
     echo "  --dryrun                     Execute a dry run, printing commands without running them."
     echo "  --entrypoint '<command>'     Set the initial command to run in the job script (required)."
     echo "  --env <key>=<val>            Set environmental variables for the job in the format KEY=VALUE (optional)."
@@ -17,7 +19,8 @@ show_help() {
     echo "  --imageVolSize <value>       Define the size of the image volume in GB (depends on the size of input image)."
     echo "  --job-size <value>           Set the number of commands per job for creating virtual machines (default: 2)."
     echo "  --mount <bucket>:<local>     Mount an S3 bucket to a local directory. Format: <bucket>:<local path> (optional)."
-    echo "  --mountOpt <value>           Specify mount options for the job (required)."
+    echo "  --mountOpt <value>           Specify mount options for the bucket (required)."
+    echo "  --volMount <size>:<folder>   Mount a volume under a directory. Size in GB (optional)."
     echo "  --no-fail-fast               Continue executing subsequent commands even if one fails."
     echo "  --opcenter <value>           Provide the Opcenter address for the job (required)."
     echo "  --parallel-commands <value>  Set the number of commands to run in parallel (default: number of CPUs)."
@@ -84,8 +87,8 @@ while (( "$#" )); do
           mount_local+=("${PARTS[1]}")
           mount_remote+=("${PARTS[0]}")
         elif [ "$current_flag" == "--download" ]; then
-          download_local+=("${PARTS[0]}")
-          download_remote+=("${PARTS[1]}")
+          download_remote+=("${PARTS[0]}")
+          download_local+=("${PARTS[1]}")
         elif [ "$current_flag" == "--upload" ]; then
           upload_local+=("${PARTS[0]}")
           upload_remote+=("${PARTS[1]}")
