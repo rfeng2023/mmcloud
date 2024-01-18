@@ -368,9 +368,10 @@ set -o errexit -o pipefail
 # Activate environment with entrypoint in job script
 ${entrypoint}
 
-# Create directories if they don't exist for download and upload
+# Create directories if they don't exist for download, upload, and cwd
 ${download_mkdir}
 ${upload_mkdir}
+mkdir -p ${cwd}
 
 # Execute the download commands to fetch data from S3
 ${download_cmd}
