@@ -8,8 +8,10 @@ show_help() {
     echo "  -c <value>                   Specify the number of CPUs to use (default and recommended for AWS Spot Instances: 2)."
     echo "  -m <value>                   Set the amount of memory in GB (default: 16)."
     echo "  --cwd <value>                Define the working directory for the job (default: ~)."
-    echo "  --download <local>:<remote>  Download files from S3. Format: <local path>:<S3 path> (optional)."
-    echo "  --upload <local>:<remote>    Upload files to S3. Format: <local path>:<S3 path> (optional)."
+    echo "  --download <remote>:<local>  Download files/folders from S3. Format: <S3 path>:<local path> (optional)."
+    echo "  --upload <local>:<remote>    Upload folders to S3. Format: <local path>:<S3 path> (optional)."
+    # echo "  --downloadOpt '<value>'      Options for download, separated by ',' (optional)."
+    # echo "  --uploadOpt '<value>'        Options for upload, separated by ',' (optional)."
     echo "  --dryrun                     Execute a dry run, printing commands without running them."
     echo "  --entrypoint '<command>'     Set the initial command to run in the job script (required)."
     echo "  --env <key>=<val>            Set environmental variables for the job in the format KEY=VALUE (optional)."
@@ -17,7 +19,8 @@ show_help() {
     echo "  --imageVolSize <value>       Define the size of the image volume in GB (depends on the size of input image)."
     echo "  --job-size <value>           Set the number of commands per job for creating virtual machines (default: 2)."
     echo "  --mount <bucket>:<local>     Mount an S3 bucket to a local directory. Format: <bucket>:<local path> (optional)."
-    echo "  --mountOpt <value>           Specify mount options for the job (required)."
+    echo "  --mountOpt <value>           Specify mount options for the bucket (required)."
+    echo "  --volMount <size>:<folder>   Mount a volume under a directory. Size in GB (optional)."
     echo "  --no-fail-fast               Continue executing subsequent commands even if one fails."
     echo "  --opcenter <value>           Provide the Opcenter address for the job (required)."
     echo "  --parallel-commands <value>  Set the number of commands to run in parallel (default: number of CPUs)."
@@ -41,6 +44,8 @@ declare -a mount_local=()
 declare -a mount_remote=()
 declare -a download_local=()
 declare -a download_remote=()
+declare -a downloadOpt=()
+declare -a uploadOpt=()
 declare -a upload_local=()
 declare -a upload_remote=()
 opcenter=""
@@ -51,6 +56,7 @@ job_size=2
 parallel_commands=$c_value
 imageVolSize=""
 no_fail="|| { command_failed=1; break; }"
+declare -a volMount=()
 
 while (( "$#" )); do
   case "$1" in
@@ -71,10 +77,35 @@ while (( "$#" )); do
         shift
       done
       ;;
+    --volMount)
+      shift
+      while [ $# -gt 0 ] && [[ $1 != -* ]]; do
+        IFS='' read -ra VOLUME <<< "$1"
+        volMount+=("${VOLUME[0]}")
+        shift
+      done
+      ;;
     --image)
       image="$2"
       shift 2
       ;;
+    # --downloadOpt)
+    #   shift
+    #   while [ $# -gt 0 ] && [[ $1 != -* ]]; do
+    #     IFS=',' read -ra DOWNLOAD <<< "$1"
+    #     echo "${DOWNLOAD[0]}"
+    #     downloadOpt+=("${DOWNLOAD[0]}")
+    #     shift
+    #   done
+    #   ;;
+    # --uploadOpt)
+    #   shift
+    #   while [ $# -gt 0 ] && [[ $1 != -* ]]; do
+    #     IFS=',' read -ra UPLOAD <<< "$1"
+    #     uploadOpt+=("${UPLOAD[0]}")
+    #     shift
+    #   done
+    #   ;;
     --mount|--download|--upload)
       current_flag="$1"
       shift
@@ -84,8 +115,8 @@ while (( "$#" )); do
           mount_local+=("${PARTS[1]}")
           mount_remote+=("${PARTS[0]}")
         elif [ "$current_flag" == "--download" ]; then
-          download_local+=("${PARTS[0]}")
-          download_remote+=("${PARTS[1]}")
+          download_remote+=("${PARTS[0]}")
+          download_local+=("${PARTS[1]}")
         elif [ "$current_flag" == "--upload" ]; then
           upload_local+=("${PARTS[0]}")
           upload_remote+=("${PARTS[1]}")
@@ -181,51 +212,97 @@ check_required_params() {
 }
 
 create_download_commands() {
-    local cmd=""
+  local download_cmd=""
+
+  # If no downloadOpt option, just create download commands
+  if [ ${#downloadOpt[@]} -eq 0 ]; then
     for i in "${!download_local[@]}"; do
-        local source="${download_remote[$i]}"
-        local destination="${download_local[$i]}"
-
-        # Add mkdir command
-        cmd+="mkdir -p $destination\n"
-
-        # Add AWS download command
-        cmd+="aws s3 sync s3://$source $destination\n"
+      # If local folder has a trailing slash, we are copying into a folder, therefore we make the folder
+      if [[ ${download_remote[$i]} =~ /$ ]]; then
+        download_cmd+="mkdir -p ${download_local[$i]}\n"
+      fi
+        download_cmd+="aws s3 cp s3://${download_remote[$i]} ${download_local[$i]} --recursive\n"
     done
+  fi
 
-    # Remove the last '\n'
-    cmd=${cmd%\\n}
+  # # If just one downloadOpt option, use the same one for all download commands
+  # elif [ ${#downloadOpt[@]} -eq 1 ]; then
+  #   for i in "${!download_local[@]}"; do
+  #     # If local folder has a trailing slash, we are copying into a folder, therefore we make the folder
+  #     if [[ ${download_remote[$i]} =~ /$ ]]; then
+  #       download_cmd+="mkdir -p ${download_local[$i]}\n"
+  #     fi
+  #       download_cmd+="aws s3 cp s3://${download_remote[$i]} ${download_local[$i]} $downloadOpt\n"
+  #   done
 
-    echo -e "$cmd"
+  # # If more than one downloadOpt option, we expect there to be the same number of download commands
+  # elif [ ${#downloadOpt[@]} -eq  ${#download_local[@]} ]; then
+  #   for i in "${!downloadOpt[@]}"; do
+  #     # If local folder has a trailing slash, we are copying into a folder, therefore we make the folder
+  #     if [[ ${download_remote[$i]} =~ /$ ]]; then
+  #       download_cmd+="mkdir -p ${download_local[$i]}\n"
+  #     fi
+  #     download_cmd+="aws s3 cp s3://${download_remote[$i]} ${download_local[$i]} ${downloadOpt[$i]}\n"
+  #   done
+
+  # # Number of downloadOpts > 1 and dne number of downloads
+  # else
+  #   echo -e "\n[ERROR] If there are multiple download options, please provide the same number of download options and same number of downloads\n"
+  #   exit 1
+  # fi
+
+  download_cmd=${download_cmd%\\n}
+  echo -e $download_cmd
 }
 
 create_upload_commands() {
-    local cmd=""
+  local upload_cmd=""
+
+  # If no uploadOpt option, just create upload commands
+  if [ ${#uploadOpt[@]} -eq 0 ]; then
     for i in "${!upload_local[@]}"; do
-        local source="${upload_local[$i]}"
-        local destination="${upload_remote[$i]%/}"
-
+        upload_cmd+="mkdir -p ${upload_local[$i]}\n"
         if [[ ${upload_local[$i]} =~ /$ ]]; then
-            # Add mkdir command for source folder if dne
-            cmd+="mkdir -p $source\n"
-            # Add AWS upload command
-            cmd+="aws s3 sync $source s3://$destination"
-            cmd+="\n"
-        else
-            local last_folder=$(basename "$source")
-            # Add mkdir command for source folder if dne
-            cmd+="mkdir -p $source\n"
-            # Add AWS upload command
-            cmd+="aws s3 sync $source s3://$destination/$last_folder"
-            cmd+="\n"
+          upload_cmd+="aws s3 sync ${upload_local[$i]} s3://${upload_remote[$i]}\n"
+        else  
+          local last_folder=$(basename "${upload_local[$i]}")
+          upload_cmd+="aws s3 sync ${upload_local[$i]} s3://${upload_remote[$i]}/$last_folder\n"
         fi
-
     done
+  fi
 
-    # Remove the last '\n'
-    cmd=${cmd%\\n}
+  # # If just one uploadOpt option, use the same one for all upload commands
+  # elif [ ${#uploadOpt[@]} -eq 1 ]; then
+  #   for i in "${!upload_local[@]}"; do
+  #     upload_cmd+="mkdir -p ${upload_local[$i]}\n"
+  #     if [[ ${upload_local[$i]} =~ /$ ]]; then
+  #       upload_cmd+="aws s3 sync ${upload_local[$i]} s3://${upload_remote[$i]} $uploadOpt\n"
+  #     else  
+  #       local last_folder=$(basename "${upload_local[$i]}")
+  #       upload_cmd+="aws s3 sync ${upload_local[$i]} s3://${upload_remote[$i]}/$last_folder $uploadOpt\n"
+  #     fi
+  #   done
 
-    echo -e "$cmd"
+  # # If more than one uploadOpt option, we expect there to be the same number of upload commands
+  # elif [ ${#uploadOpt[@]} -eq  ${#upload_local[@]} ]; then
+  #   for i in "${!uploadOpt[@]}"; do
+  #     upload_cmd+="mkdir -p ${upload_local[$i]}\n"
+  #     if [[ ${upload_local[$i]} =~ /$ ]]; then
+  #         upload_cmd+="aws s3 sync ${upload_local[$i]} s3://${upload_remote[$i]} ${uploadOpt[$i]}\n"
+  #     else
+  #       local last_folder=$(basename "${upload_local[$i]}")
+  #       upload_cmd+="aws s3 sync ${upload_local[$i]} s3://${upload_remote[$i]}/$last_folder ${uploadOpt[$i]}\n"
+  #     fi
+  #   done
+
+  # # Number of uploadOpts > 1 and dne number of uploads
+  # else
+  #   echo -e "\n[ERROR] If there are multiple upload options, please provide the same number of upload options and same number of uploads\n"
+  #   exit 1
+  # fi
+
+  upload_cmd=${upload_cmd%\\n}
+  echo -e $upload_cmd
 }
 
 generate_parallel_commands() {
@@ -284,6 +361,20 @@ mount_buckets() {
   echo -e $dataVolume_cmd
 }
 
+mount_volumes() {
+  local volumeMount_cmd=""
+
+  for i in "${!volMount[@]}"; do
+    IFS=':' read -ra PARTS <<< "${volMount[i]}"
+    local size="${PARTS[0]}"
+    local folder="${PARTS[1]}"
+
+    volumeMount_cmd+="--dataVolume '[size=$size]:$folder "
+  done
+
+  echo -e $volumeMount_cmd
+}
+
 submit_each_line_with_mmfloat() {
     local script_file="$1"
     local download_cmd=""
@@ -315,6 +406,9 @@ submit_each_line_with_mmfloat() {
 
     # Mount bucket(s) with provided mount options
     dataVolume_params=$(mount_buckets)
+
+    # Mount volume(s)
+    volume_params=$(mount_volumes)
 
     # Read all lines from the script file into an array
     all_commands=""
@@ -365,9 +459,12 @@ set -o errexit -o pipefail
 # Activate environment with entrypoint in job script
 ${entrypoint}
 
-# Create directories if they don't exist for download and upload
+# Create directories if they don't exist for download
 ${download_mkdir}
+# Create directories if they don't exist for upload
 ${upload_mkdir}
+# Create directories if they don't exist for cwd
+mkdir -p ${cwd}
 
 # Execute the download commands to fetch data from S3
 ${download_cmd}
@@ -400,7 +497,7 @@ EOF
             job_filename=${TMPDIR:-/tmp}/${script_file%.*}/$j.mmjob.sh
         fi
         printf "$job_script" > $job_filename 
-        full_cmd+="float submit -i '$image' -j $job_filename -c $c_value -m $m_value $dataVolume_params"
+        full_cmd+="float submit -i '$image' -j $job_filename -c $c_value -m $m_value $dataVolume_params $volume_params"
 
         # Additional float cli parameters
         if [[ ! -z '$env' ]]; then
