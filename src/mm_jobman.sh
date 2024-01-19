@@ -369,7 +369,7 @@ mount_volumes() {
     local size="${PARTS[0]}"
     local folder="${PARTS[1]}"
 
-    volumeMount_cmd+="--dataVolume '[size=$size]:$folder "
+    volumeMount_cmd+="--dataVolume '[size=$size]:$folder'"
   done
 
   echo -e $volumeMount_cmd
