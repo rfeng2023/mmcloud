@@ -23,10 +23,10 @@ username=aw3600
  --env ENV_NAME=pecotmr \
  --imageVolSize 10 \
  --opcenter 54.81.85.209 \
- --download "statfungen/ftp_fgc_xqtl/ROSMAP/genotype/analysis_ready/:/home/$username/data" \
+ --download "statfungen/ftp_fgc_xqtl/ROSMAP/genotype/analysis_ready/:/home/$username/input" \
  --upload /home/$username/output:statfungen/ftp_fgc_xqtl/ \
  --no-fail-fast \
- --volMount 60:/home/$username/data
+ --volMount "60:/home/$username/input"
 ```
 
 Here, 
