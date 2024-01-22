@@ -5,28 +5,26 @@
 show_help() {
     echo "Usage: $0 [options] <script>"
     echo "Options:"
-    echo "  -c <value>                                Specify the number of CPUs to use (default and recommended for AWS Spot Instances: 2)."
-    echo "  -m <value>                                Set the amount of memory in GB (default: 16)."
-    echo "  --cwd <value>                             Define the working directory for the job (default: ~)."
-    echo "  --download <remote>:<local>               Download files/folders from S3. Format: <S3 path>:<local path> (optional)."
-    echo "  --upload <local>:<remote>                 Upload folders to S3. Format: <local path>:<S3 path> (optional)."
-    echo "  --recursive <true>                        Use the recursive flag for downloading. (optional)."
-    echo "  --download-include '<value>'              Use the include flag to include certain files for download (space-separated) (optional)."
+    echo "  -c <value>                   Specify the number of CPUs to use (default and recommended for AWS Spot Instances: 2)."
+    echo "  -m <value>                   Set the amount of memory in GB (default: 16)."
+    echo "  --cwd <value>                Define the working directory for the job (default: ~)."
+    echo "  --download <remote>:<local>  Download files/folders from S3. Format: <S3 path>:<local path> (optional)."
+    echo "  --upload <local>:<remote>    Upload folders to S3. Format: <local path>:<S3 path> (optional)."
     # echo "  --downloadOpt '<value>'      Options for download, separated by ',' (optional)."
     # echo "  --uploadOpt '<value>'        Options for upload, separated by ',' (optional)."
-    echo "  --dryrun                                  Execute a dry run, printing commands without running them."
-    echo "  --entrypoint '<command>'                  Set the initial command to run in the job script (required)."
-    echo "  --env <key>=<val>                         Set environmental variables for the job in the format KEY=VALUE (optional)."
-    echo "  --image <value>                           Specify the Docker image to use for the job (required)."
-    echo "  --imageVolSize <value>                    Define the size of the image volume in GB (depends on the size of input image)."
-    echo "  --job-size <value>                        Set the number of commands per job for creating virtual machines (default: 2)."
-    echo "  --mount <bucket>:<local>                  Mount an S3 bucket to a local directory. Format: <bucket>:<local path> (optional)."
-    echo "  --mountOpt <value>                        Specify mount options for the bucket (required)."
-    echo "  --volMount <size>:<folder>                Mount a volume under a directory. Size in GB (optional)."
-    echo "  --no-fail-fast                            Continue executing subsequent commands even if one fails."
-    echo "  --opcenter <value>                        Provide the Opcenter address for the job (required)."
-    echo "  --parallel-commands <value>               Set the number of commands to run in parallel (default: number of CPUs)."
-    echo "  --help                                    Show this help message."
+    echo "  --dryrun                     Execute a dry run, printing commands without running them."
+    echo "  --entrypoint '<command>'     Set the initial command to run in the job script (required)."
+    echo "  --env <key>=<val>            Set environmental variables for the job in the format KEY=VALUE (optional)."
+    echo "  --image <value>              Specify the Docker image to use for the job (required)."
+    echo "  --imageVolSize <value>       Define the size of the image volume in GB (depends on the size of input image)."
+    echo "  --job-size <value>           Set the number of commands per job for creating virtual machines (default: 2)."
+    echo "  --mount <bucket>:<local>     Mount an S3 bucket to a local directory. Format: <bucket>:<local path> (optional)."
+    echo "  --mountOpt <value>           Specify mount options for the bucket (required)."
+    echo "  --volMount <size>:<folder>   Mount a volume under a directory. Size in GB (optional)."
+    echo "  --no-fail-fast               Continue executing subsequent commands even if one fails."
+    echo "  --opcenter <value>           Provide the Opcenter address for the job (required)."
+    echo "  --parallel-commands <value>  Set the number of commands to run in parallel (default: number of CPUs)."
+    echo "  --help                       Show this help message."
 }
 
 # Check if at least one argument is provided
@@ -58,8 +56,6 @@ job_size=2
 parallel_commands=$c_value
 imageVolSize=""
 no_fail="|| { command_failed=1; break; }"
-declare -a download_recursive=()
-declare -a download_include=()
 declare -a volMount=()
 
 while (( "$#" )); do
@@ -86,22 +82,6 @@ while (( "$#" )); do
       while [ $# -gt 0 ] && [[ $1 != -* ]]; do
         IFS='' read -ra VOLUME <<< "$1"
         volMount+=("${VOLUME[0]}")
-        shift
-      done
-      ;;
-    --recursive)
-      shift
-      while [ $# -gt 0 ] && [[ $1 != -* ]]; do
-        IFS='' read -ra RECURSIVE <<< "$1"
-        download_recursive+=("${RECURSIVE[0]}")
-        shift
-      done
-      ;;
-    --download-include)
-      shift
-      while [ $# -gt 0 ] && [[ $1 != -* ]]; do
-        IFS='' read -ra INCLUDE <<< "$1"
-        download_include+=("${INCLUDE[0]}")
         shift
       done
       ;;
@@ -234,33 +214,16 @@ check_required_params() {
 create_download_commands() {
   local download_cmd=""
 
-  # if [ ${#downloadOpt[@]} -eq 0 ]; then
+  # If no downloadOpt option, just create download commands
+  if [ ${#downloadOpt[@]} -eq 0 ]; then
     for i in "${!download_local[@]}"; do
       # If local folder has a trailing slash, we are copying into a folder, therefore we make the folder
       if [[ ${download_remote[$i]} =~ /$ ]]; then
         download_cmd+="mkdir -p ${download_local[$i]}\n"
       fi
-      download_cmd+="aws s3 cp s3://${download_remote[$i]} ${download_local[$i]}"
-
-      # If number of recursive or include is less than download commands, they just won't be added
-      if [ ${#download_recursive[@]} -gt 0 ]; then
-        # Split by space
-        IFS=' ' read -ra RECURSIVES <<< "${download_recursive[$i]}"
-        for j in "${!RECURSIVES[@]}"; do
-          download_cmd+=" --recursive"
-        done
-      fi
-      # Separate include commands with space
-      if [ ${#download_include[@]} -gt 0 ]; then
-        # Split by space
-        IFS=' ' read -ra INCLUDES <<< "${download_include[$i]}"
-        for j in "${!INCLUDES[@]}"; do
-          download_cmd+=" --include ${INCLUDES[$j]}"
-        done
-      fi
-      download_cmd+="\n"
+        download_cmd+="aws s3 cp s3://${download_remote[$i]} ${download_local[$i]} --recursive\n"
     done
-  # fi
+  fi
 
   # # If just one downloadOpt option, use the same one for all download commands
   # elif [ ${#downloadOpt[@]} -eq 1 ]; then
