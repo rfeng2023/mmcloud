@@ -23,7 +23,9 @@ username=aw3600
  --env ENV_NAME=pecotmr \
  --imageVolSize 10 \
  --opcenter 54.81.85.209 \
- --download "statfungen/ftp_fgc_xqtl/ROSMAP/genotype/analysis_ready/:/home/$username/input" \
+ --download "statfungen/ftp_fgc_xqtl/ROSMAP/genotype/geno_by_chrom/:/home/$username/input" \
+ --download-include 'ROSMAP_NIA_WGS.leftnorm.bcftools_qc.plink_qc.1.*'  \
+ --recursive true \
  --upload /home/$username/output:statfungen/ftp_fgc_xqtl/ \
  --no-fail-fast \
  --volMount "60:/home/$username/input"
@@ -36,7 +38,9 @@ Here,
 - `--mount` includes two folders: the AWS folder `s3://statfungen/ftp_fgc_xql` is mounted to the VM as `~/data`; the AWS folder `s3://statfungen/ftp_fgc_xqtl/sos_cache/aw3600` is mounted to the VM as `~/.sos`.
 - `--mountOpts` specifies "mode=r" for the first folder that mounts it as read-only to the analysis command. That means the analysis command cannot directly change or add anything to `~/data` folder in the VM. The second folder is mounted with "mode=rw", that is, the analysis command can write into the `~/.sos` folder in the VM.
 - `--env`, `--entrypoint`, `--image` and  `--imageVolSize` options are specific to how our docker image `ghcr.io/cumc/pecotmr_docker` is configured to work with the VM.  
-- `--download` specifies the folder or files inside of the S3 bucket that we would like to download to the VM, at the begin of the analysis. If any data has been downloaded using this command, you should update the file paths in the 'commands_to_submit.txt' file accordingly. For instance, if we downloaded genotype data from `statfungen/ftp_fgc_xqtl/ROSMAP/genotype/analysis_ready/` to the VM at `/home/$username/data`, which is also the current working directory (cwd), then the genotype data path in your 'commands_to_submit.txt' should be specified as `./`.
+- `--download` specifies the folder inside of the S3 bucket that we would like to download to the VM, at the begin of the analysis. If any data has been downloaded using this command, you should update the file paths in the 'commands_to_submit.txt' file accordingly. For instance, if we downloaded genotype data from `statfungen/ftp_fgc_xqtl/ROSMAP/genotype/analysis_ready/` to the VM at `/home/$username/data`, which is also the current working directory (cwd), then the genotype data path in your 'commands_to_submit.txt' should be specified as `./`.
+- `--download-include` should be used to specify the prefix or suffix of files you want to download from S3 bucket. 
+- `--recursive` should be used if you give a folder path in `--download`.
 - `--upload` specifies the folder inside of the VM that we would like to upload to the S3 bucket, at the end of the analysis. In this case, we always write the results to a folder called `~/output` inside of the VM, and we upload it to S3 at the end. Alternatively, it is also possible to mount a folder from S3 to the VM with "mode=rw" so we can directly write the outputs to that folder as they are generated. **The `--upload` approach would work the best if the job is I/O intensive; otherwise, it would be more robust to directly mount from S3 and write the output there**.
 
 - `--no-fail-fast` when this switch is turned on, all commands in a batch will be executed regardless if the previous ones failed or succeeded. 
