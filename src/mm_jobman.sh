@@ -321,11 +321,12 @@ create_upload_commands() {
   if [ ${#uploadOpt[@]} -eq 0 ]; then
     for i in "${!upload_local[@]}"; do
         upload_cmd+="mkdir -p ${upload_local[$i]}\n"
+        local upload_folder=${upload_remote[$i]%\/}
         if [[ ${upload_local[$i]} =~ /$ ]]; then
-          upload_cmd+="aws s3 sync ${upload_local[$i]} s3://${upload_remote[$i]}\n"
+          upload_cmd+="aws s3 sync ${upload_local[$i]} s3://${upload_folder}\n"
         else  
           local last_folder=$(basename "${upload_local[$i]}")
-          upload_cmd+="aws s3 sync ${upload_local[$i]} s3://${upload_remote[$i]}/$last_folder\n"
+          upload_cmd+="aws s3 sync ${upload_local[$i]} s3://${upload_folder}/$last_folder\n"
         fi
     done
   fi
