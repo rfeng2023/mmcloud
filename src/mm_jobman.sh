@@ -259,8 +259,8 @@ create_download_commands() {
   # if [ ${#downloadOpt[@]} -eq 0 ]; then
     for i in "${!download_local[@]}"; do
       # If local folder has a trailing slash, we are copying into a folder, therefore we make the folder
-      if [[ ${download_remote[$i]} =~ /$ ]]; then
-        download_cmd+="mkdir -p ${download_local[$i]}\n"
+      if [[ ${download_local[$i]} =~ /$ ]]; then
+        download_cmd+="mkdir -p ${download_local[$i]%\/}\n"
       fi
       download_cmd+="aws s3 cp s3://${download_remote[$i]} ${download_local[$i]}"
 
@@ -320,7 +320,7 @@ create_upload_commands() {
   # If no uploadOpt option, just create upload commands
   if [ ${#uploadOpt[@]} -eq 0 ]; then
     for i in "${!upload_local[@]}"; do
-        upload_cmd+="mkdir -p ${upload_local[$i]}\n"
+        upload_cmd+="mkdir -p ${upload_local[$i]%\/}\n"
         local upload_folder=${upload_remote[$i]%\/}
         if [[ ${upload_local[$i]} =~ /$ ]]; then
           upload_cmd+="aws s3 sync ${upload_local[$i]} s3://${upload_folder}\n"
