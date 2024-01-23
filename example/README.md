@@ -16,7 +16,8 @@ username=aw3600
  --job-size 100 \
  --mount statfungen/ftp_fgc_xqtl:/home/$username/data \
 	 statfungen/ftp_fgc_xqtl/sos_cache/$username:/home/$username/.sos \
- --mountOpt "mode=r" "mode=rw"  \
+	 statfungen/ftp_fgc_xqtl/analysis_result/finemapping_twas:/home/$username/output \
+ --mountOpt "mode=r" "mode=rw" "mode=rw" \
  --cwd /home/$username/data \
  --image ghcr.io/cumc/pecotmr_docker:latest \
  --entrypoint "source /usr/local/bin/_activate_current_env.sh" \
@@ -26,24 +27,20 @@ username=aw3600
  --download "statfungen/ftp_fgc_xqtl/ROSMAP/genotype/geno_by_chrom/:/home/$username/input/" \
  --download-include 'ROSMAP_NIA_WGS.leftnorm.bcftools_qc.plink_qc.1.*'  \
  --recursive true \
- --upload /home/$username/output:statfungen/ftp_fgc_xqtl/ \
- --no-fail-fast \
- --ebs-mount /home/$username/input=60
+ --ebs-mount /home/$username/input=60 \
+ --no-fail-fast 
 ```
 
 Here, 
 
 - `-c 2` and `-m 16` specifies that the VM should have 2 CPU threads and 16GB of memory.
 - `--job-size 100` will split commands per line within `commands_to_submit.txt` into batches, each batch has at most 100 commands.
-- `--mount` includes two folders: the AWS folder `s3://statfungen/ftp_fgc_xql` is mounted to the VM as `~/data`; the AWS folder `s3://statfungen/ftp_fgc_xqtl/sos_cache/aw3600` is mounted to the VM as `~/.sos`.
-- `--mountOpts` specifies "mode=r" for the first folder that mounts it as read-only to the analysis command. That means the analysis command cannot directly change or add anything to `~/data` folder in the VM. The second folder is mounted with "mode=rw", that is, the analysis command can write into the `~/.sos` folder in the VM.
+- `--mount` includes three folders: the AWS folder `s3://statfungen/ftp_fgc_xql` is mounted to the VM as `~/data`; the AWS folder `s3://statfungen/ftp_fgc_xqtl/sos_cache/aw3600` is mounted to the VM as `~/.sos`; the AWS folder `statfungen/ftp_fgc_xqtl/analysis_result/finemapping_twas` is mounted to the VM as `~/output`.
+- `--mountOpts` specifies "mode=r" for the first folder that mounts it as read-only to the analysis command. That means the analysis command cannot directly change or add anything to `~/data` folder in the VM. The second folder is mounted with "mode=rw", that is, the analysis command can write into the `~/.sos` folder in the VM.The third folder is mounted with "mode=rw", so we can directly write the outputs to that folder as they are generated.
 - `--env`, `--entrypoint`, `--image` and  `--imageVolSize` options are specific to how our docker image `ghcr.io/cumc/pecotmr_docker` is configured to work with the VM.  
 - `--download` specifies the folder inside of the S3 bucket that we would like to download to the VM, at the begin of the analysis. If any data has been downloaded using this command, you should update the file paths in the 'commands_to_submit.txt' file accordingly. For instance, if we downloaded genotype data from `statfungen/ftp_fgc_xqtl/ROSMAP/genotype/analysis_ready/` to the VM at `/home/$username/data`, which is also the current working directory (cwd), then the genotype data path in your 'commands_to_submit.txt' should be specified as `./`.
 - `--download-include` should be used to specify the prefix or suffix of files you want to download from S3 bucket. 
 - `--recursive` should be used if you give a folder path in `--download`.
-- `--upload` specifies the folder inside of the VM that we would like to upload to the S3 bucket, at the end of the analysis. In this case, we always write the results to a folder called `~/output` inside of the VM, and we upload it to S3 at the end. Alternatively, it is also possible to mount a folder from S3 to the VM with "mode=rw" so we can directly write the outputs to that folder as they are generated. **The `--upload` approach would work the best if the job is I/O intensive; otherwise, it would be more robust to directly mount from S3 and write the output there**.
-
-- `--no-fail-fast` when this switch is turned on, all commands in a batch will be executed regardless if the previous ones failed or succeeded. 
 - `--ebs-mount` Mount a dedicated local EBS volume to the VM instance. When downloading data from an S3 bucket instead of using direct mounts, ensure you allocate sufficient storage space to the destination path by mounting a dedicated EBS volume. It must be different from the path in `--mount` which mounts a folder on the S3 bucket. 
-
+- `--no-fail-fast` when this switch is turned on, all commands in a batch will be executed regardless if the previous ones failed or succeeded. 
 To test this for yourself without submitting the job, please add `--dryrun` to the end of the command (eg right after `--no-fail-fast`) and run on your computer. You should find a file called `commands_to_submit_1.mmjob.sh` you can take a look at it to see the actual script that will be executed on the VM.
