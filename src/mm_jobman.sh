@@ -62,7 +62,6 @@ imageVolSize=""
 no_fail="|| { command_failed=1; break; }"
 declare -a download_recursive=()
 declare -a download_include=()
-declare -a EBSMount=()
 
 while (( "$#" )); do
   case "$1" in
