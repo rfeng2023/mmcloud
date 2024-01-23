@@ -23,7 +23,7 @@ username=aw3600
  --env ENV_NAME=pecotmr \
  --imageVolSize 10 \
  --opcenter 54.81.85.209 \
- --download "statfungen/ftp_fgc_xqtl/ROSMAP/genotype/geno_by_chrom/:/home/$username/input" \
+ --download "statfungen/ftp_fgc_xqtl/ROSMAP/genotype/geno_by_chrom/:/home/$username/input/" \
  --download-include 'ROSMAP_NIA_WGS.leftnorm.bcftools_qc.plink_qc.1.*'  \
  --recursive true \
  --upload /home/$username/output:statfungen/ftp_fgc_xqtl/ \
