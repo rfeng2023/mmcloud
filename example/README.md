@@ -17,7 +17,7 @@ username=aw3600
  --mount statfungen/ftp_fgc_xqtl:/home/$username/data \
 	 statfungen/ftp_fgc_xqtl/sos_cache/$username:/home/$username/.sos \
  --mountOpt "mode=r" "mode=rw"  \
- --cwd "/home/$username/data" \
+ --cwd /home/$username/data \
  --image ghcr.io/cumc/pecotmr_docker:latest \
  --entrypoint "source /usr/local/bin/_activate_current_env.sh" \
  --env ENV_NAME=pecotmr \
@@ -28,7 +28,7 @@ username=aw3600
  --recursive true \
  --upload /home/$username/output:statfungen/ftp_fgc_xqtl/ \
  --no-fail-fast \
- --volMount "60:/home/$username/input"
+ --ebs-mount /home/$username/input=60
 ```
 
 Here, 
@@ -44,6 +44,6 @@ Here,
 - `--upload` specifies the folder inside of the VM that we would like to upload to the S3 bucket, at the end of the analysis. In this case, we always write the results to a folder called `~/output` inside of the VM, and we upload it to S3 at the end. Alternatively, it is also possible to mount a folder from S3 to the VM with "mode=rw" so we can directly write the outputs to that folder as they are generated. **The `--upload` approach would work the best if the job is I/O intensive; otherwise, it would be more robust to directly mount from S3 and write the output there**.
 
 - `--no-fail-fast` when this switch is turned on, all commands in a batch will be executed regardless if the previous ones failed or succeeded. 
-- `--volMount` when downloading data from an S3 bucket instead of using direct mounts, ensure you allocate sufficient storage space to the destination path using the following command format: `<size>:<folder> `where 'size' represents the storage size in GB, and 'folder' is the destination path, which should be different from the path in `--mount`. 
+- `--ebs-mount` Mount a dedicated local EBS volume to the VM instance. When downloading data from an S3 bucket instead of using direct mounts, ensure you allocate sufficient storage space to the destination path by mounting a dedicated EBS volume. It must be different from the path in `--mount` which mounts a folder on the S3 bucket. 
 
 To test this for yourself without submitting the job, please add `--dryrun` to the end of the command (eg right after `--no-fail-fast`) and run on your computer. You should find a file called `commands_to_submit_1.mmjob.sh` you can take a look at it to see the actual script that will be executed on the VM.

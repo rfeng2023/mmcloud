@@ -22,7 +22,7 @@ show_help() {
     echo "  --job-size <value>                        Set the number of commands per job for creating virtual machines (default: 2)."
     echo "  --mount <bucket>:<local>                  Mount an S3 bucket to a local directory. Format: <bucket>:<local path> (optional)."
     echo "  --mountOpt <value>                        Specify mount options for the bucket (required)."
-    echo "  --volMount <size>:<folder>                Mount a volume under a directory. Size in GB (optional)."
+    echo "  --ebs-mount <folder>=<size>               Mount an EBS volume to a local directory. Format: <local path>=<size>. Size in GB (optional)."
     echo "  --no-fail-fast                            Continue executing subsequent commands even if one fails."
     echo "  --opcenter <value>                        Provide the Opcenter address for the job (required)."
     echo "  --parallel-commands <value>               Set the number of commands to run in parallel (default: number of CPUs)."
@@ -50,6 +50,8 @@ declare -a downloadOpt=()
 declare -a uploadOpt=()
 declare -a upload_local=()
 declare -a upload_remote=()
+declare -a ebs_mount=()
+declare -a ebs_mount_size=()
 opcenter=""
 entrypoint="date"
 cwd="~"
@@ -60,7 +62,7 @@ imageVolSize=""
 no_fail="|| { command_failed=1; break; }"
 declare -a download_recursive=()
 declare -a download_include=()
-declare -a volMount=()
+declare -a EBSMount=()
 
 while (( "$#" )); do
   case "$1" in
@@ -81,11 +83,12 @@ while (( "$#" )); do
         shift
       done
       ;;
-    --volMount)
+    --ebs-mount)
       shift
       while [ $# -gt 0 ] && [[ $1 != -* ]]; do
-        IFS='' read -ra VOLUME <<< "$1"
-        volMount+=("${VOLUME[0]}")
+        IFS='=' read -ra PARTS <<< "$1"
+        ebs_mount+=("${PARTS[0]}") 
+        ebs_mount_size+=("${PARTS[1]}")
         shift
       done
       ;;
@@ -229,6 +232,26 @@ check_required_params() {
         show_help
         exit 1
     fi
+
+    # Check for overlapping directories between ebs_mount and mount_local
+    for mount_dir in "${ebs_mount[@]}"; do
+        for local_dir in "${mount_local[@]}"; do
+            if [ "$mount_dir" == "$local_dir" ]; then
+                echo "Error: Overlapping directories found in ebs_mount and mount_local: $mount_dir"
+                exit 1
+            fi
+        done
+    done
+
+    # Check for overlapping directories between download_local and mount_local
+    for download_dir in "${download_local[@]}"; do
+        for mount_dir in "${mount_local[@]}"; do
+            if [ "$download_dir" == "$mount_dir" ]; then
+                echo "Error: Overlapping directories found in download_local and mount_local: $download_dir"
+                exit 1
+            fi
+        done
+    done
 }
 
 create_download_commands() {
@@ -401,12 +424,11 @@ mount_buckets() {
 mount_volumes() {
   local volumeMount_cmd=""
 
-  for i in "${!volMount[@]}"; do
-    IFS=':' read -ra PARTS <<< "${volMount[i]}"
-    local size="${PARTS[0]}"
-    local folder="${PARTS[1]}"
+  for i in "${!ebs_mount[@]}"; do
+    local folder="${ebs_mount[i]}"
+    local size="${ebs_mount_size[i]}"
 
-    volumeMount_cmd+="--dataVolume '[size=$size]:$folder'"
+    volumeMount_cmd+="--dataVolume '[size=$size]:$folder' "
   done
 
   echo -e $volumeMount_cmd
