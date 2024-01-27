@@ -10,7 +10,7 @@ show_help() {
     echo "  --cwd <value>                             Define the working directory for the job (default: ~)."
     echo "  --download <remote>:<local>               Download files/folders from S3. Format: <S3 path>:<local path> (optional)."
     echo "  --upload <local>:<remote>                 Upload folders to S3. Format: <local path>:<S3 path> (optional)."
-    echo "  --recursive <true>                        Use the recursive flag for downloading. (optional)."
+    # echo "  --recursive <true>                        Use the recursive flag for downloading. (optional)."
     echo "  --download-include '<value>'              Use the include flag to include certain files for download (space-separated) (optional)."
     # echo "  --downloadOpt '<value>'      Options for download, separated by ',' (optional)."
     # echo "  --uploadOpt '<value>'        Options for upload, separated by ',' (optional)."
@@ -91,14 +91,14 @@ while (( "$#" )); do
         shift
       done
       ;;
-    --recursive)
-      shift
-      while [ $# -gt 0 ] && [[ $1 != -* ]]; do
-        IFS='' read -ra RECURSIVE <<< "$1"
-        download_recursive+=("${RECURSIVE[0]}")
-        shift
-      done
-      ;;
+    # --recursive)
+    #   shift
+    #   while [ $# -gt 0 ] && [[ $1 != -* ]]; do
+    #     IFS='' read -ra RECURSIVE <<< "$1"
+    #     download_recursive+=("${RECURSIVE[0]}")
+    #     shift
+    #   done
+    #   ;;
     --download-include)
       shift
       while [ $# -gt 0 ] && [[ $1 != -* ]]; do
@@ -262,22 +262,26 @@ create_download_commands() {
       if [[ ${download_local[$i]} =~ /$ ]]; then
         download_cmd+="mkdir -p ${download_local[$i]%\/}\n"
       fi
-      download_cmd+="aws s3 cp s3://${download_remote[$i]} ${download_local[$i]}"
+      download_cmd+="aws s3 cp s3://${download_remote[$i]} ${download_local[$i]} --recursive"
 
       # If number of recursive or include is less than download commands, they just won't be added
-      if [ ${#download_recursive[@]} -gt 0 ]; then
-        # Split by space
-        IFS=' ' read -ra RECURSIVES <<< "${download_recursive[$i]}"
-        for j in "${!RECURSIVES[@]}"; do
-          download_cmd+=" --recursive"
-        done
-      fi
+      # if [ ${#download_recursive[@]} -gt 0 ]; then
+      #   # Split by space
+      #   IFS=' ' read -ra RECURSIVES <<< "${download_recursive[$i]}"
+      #   for j in "${!RECURSIVES[@]}"; do
+      #     download_cmd+=" --recursive"
+      #   done
+      # fi
       # Separate include commands with space
       if [ ${#download_include[@]} -gt 0 ]; then
         # Split by space
         IFS=' ' read -ra INCLUDES <<< "${download_include[$i]}"
+        if [ ${#INCLUDES[@]} -gt 0 ]; then
+          # If an include command is used, we want to make sure we don't include the entire folder
+          download_cmd+=" --exclude '*'"
+        fi
         for j in "${!INCLUDES[@]}"; do
-          download_cmd+=" --include ${INCLUDES[$j]}"
+          download_cmd+=" --include '${INCLUDES[$j]}'"
         done
       fi
       download_cmd+="\n"
