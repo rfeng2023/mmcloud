@@ -15,8 +15,8 @@ username=aw3600
  -c 2 -m 16 \
  --job-size 100 \
  --mount statfungen/ftp_fgc_xqtl:/home/$username/data \
-         statfungen/ftp_fgc_xqtl/sos_cache/$username:/home/$username/.sos \
-         statfungen/ftp_fgc_xqtl/analysis_result/finemapping_twas:/home/$username/output \
+-  statfungen/ftp_fgc_xqtl/sos_cache/$username:/home/$username/.sos \
+-  statfungen/ftp_fgc_xqtl/analysis_result/finemapping_twas:/home/$username/output \
  --mountOpt "mode=r" "mode=rw" "mode=rw" \
  --cwd "/home/$username/data" \
  --image ghcr.io/cumc/pecotmr_docker:latest \
@@ -42,3 +42,22 @@ Here,
 - `--ebs-mount` Mount a dedicated local EBS volume to the VM instance. When downloading data from an S3 bucket instead of using direct mounts, ensure you allocate sufficient storage space to the destination path by mounting a dedicated EBS volume. It must be different from the path in `--mount` which mounts a folder on the S3 bucket. 
 - `--no-fail-fast` when this switch is turned on, all commands in a batch will be executed regardless if the previous ones failed or succeeded. 
 To test this for yourself without submitting the job, please add `--dryrun` to the end of the command (eg right after `--no-fail-fast`) and run on your computer. You should find a file called `commands_to_submit_1.mmjob.sh` you can take a look at it to see the actual script that will be executed on the VM.
+
+
+## Example `jupyter_setup.sh` command
+```bash
+ bash jupyter_setup.sh -u <float_user> -p <password> 
+```
+
+The parameters including:
+- `-u|--user` user name for your float account
+- `-p|--password` password for your float account
+- `-o|--OP_IP` the IP address for your opcenter, default is `54.81.85.209`
+- `-dv|--dataVolume` to choose mount to S3 or not, the option is `yes|no`, default is `yes`
+- `-s3|--s3_path` data path on S3 bucket would be mountted to VM, default is `s3://statfungen/ftp_fgc_xqtl/`
+- `-vm|--VM_path` the VM path would be mountted to S3 bucket, default is `/data/`
+- `-i|--image` image for jupyter notebook, default is `sos2:latest`
+- `-c|--core` default is `4`
+- `-m|--mem` default is `16`
+- `-pub|--publish` default is `8888:8888`
+- `-sg|--securityGroup` default
