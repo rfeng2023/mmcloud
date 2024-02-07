@@ -376,27 +376,18 @@ generate_parallel_commands() {
   local start=0
   substring=''
 
-  while [ $start -lt ${#array[@]} ]; do
-      local end=$((start + parallel_commands))
-      # If parallel_commands is 1, or if only one remainder command,
-      # No need for `parallel`
-      end_val=${#array[@]}
-      if [ $parallel_commands -ne 1 ] && [ $((end_val - start)) -ne 1 ]; then
-        substring+='parallel :::'
-      fi
-      for ((i = start; i < end && i < ${#array[@]}; i++)); do
-	      substring+=" "
-          # No quotation marks if it is a singular command
-          if [ $parallel_commands -ne 1 ] && [ $((end_val - start)) -ne 1 ]; then
-            substring+="${array[i]}"
-          else
-            # Marker for single commands, as should not have quotes later
-            substring+="<${array[i]}>"
-          fi
-      done
-      start=$end
-      substring+='\n'
+  # If parallel_commands is 1, or if only one remainder command,
+  # No need for `parallel`
+  end_val=${#array[@]}
+  if [ $parallel_commands -ne 1 ] && [ $((end_val - start)) -ne 1 ]; then
+    substring+="parallel -j $parallel_commands :::"
+  fi
+  for ((i = start; i < end_val; i++)); do
+    substring+=" "
+    substring+="${array[i]}"
   done
+
+  substring+='\n'
   echo -e $substring
 }
 
