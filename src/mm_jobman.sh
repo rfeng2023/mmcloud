@@ -5,8 +5,8 @@
 show_help() {
     echo "Usage: $0 [options] <script>"
     echo "Options:"
-    echo "  -c <value>                                Specify the number of CPUs to use (default and recommended for AWS Spot Instances: 2)."
-    echo "  -m <value>                                Set the amount of memory in GB (default: 16)."
+    echo "  -c <min>:<optional max>                   Specify the min and max of CPUs to use (default and recommended for AWS Spot Instances: 2)."
+    echo "  -m <min>:<optional max>                   Set the min and max of memory in GB (default: 16)."
     echo "  --cwd <value>                             Define the working directory for the job (default: ~)."
     echo "  --download <remote>:<local>               Download files/folders from S3. Format: <S3 path>:<local path> (optional)."
     echo "  --upload <local>:<remote>                 Upload folders to S3. Format: <local path>:<S3 path> (optional)."
@@ -37,8 +37,10 @@ fi
 
 # Initialize variables for options with default values
 # CPU = 2 is a good default for AWS Spot instances
-c_value=2
-m_value=16
+c_min=2
+c_max=""
+m_min=16
+m_max=""
 declare -a mountOpt=()
 image=""
 dryrun=false
@@ -57,7 +59,7 @@ entrypoint="date"
 cwd="~"
 env=""
 job_size=2
-parallel_commands=$c_value
+parallel_commands=$c_min
 imageVolSize=""
 no_fail="|| { command_failed=1; break; }"
 declare -a download_recursive=()
@@ -66,12 +68,22 @@ declare -a download_include=()
 while (( "$#" )); do
   case "$1" in
     -c)
-      c_value="$2"
-      parallel_commands=$c_value
+      if [[ "$2" =~ ":" ]]; then
+        c_min=$(echo "$2" | cut -d':' -f1)
+        c_max=:$(echo "$2" | cut -d':' -f2)
+      else
+        c_min="$2"
+      fi
+      parallel_commands=$c_min
       shift 2
       ;;
     -m)
-      m_value="$2"
+      if [[ "$2" =~ ":" ]]; then
+        m_min=$(echo "$2" | cut -d':' -f1)
+        m_max=:$(echo "$2" | cut -d':' -f2)
+      else
+        m_min="$2"
+      fi
       shift 2
       ;;
     --mountOpt)
@@ -551,7 +563,7 @@ EOF
             job_filename=${TMPDIR:-/tmp}/${script_file%.*}/$j.mmjob.sh
         fi
         printf "$job_script" > $job_filename 
-        full_cmd+="float submit -i '$image' -j $job_filename -c $c_value -m $m_value $dataVolume_params $volume_params"
+        full_cmd+="float submit -i '$image' -j $job_filename -c $c_min$c_max -m $m_min$m_max $dataVolume_params $volume_params"
 
         # Additional float cli parameters
         if [[ ! -z '$env' ]]; then
@@ -575,8 +587,8 @@ main() {
     check_required_params
     if [ "$dryrun" = true ]; then
         echo "#Processing script: $SCRIPT_NAME"
-        echo "#c value: $c_value"
-        echo "#m value: $m_value"
+        echo "#c values: $c_min$c_max"
+        echo "#m values: $m_min$m_max"
         echo "#mountOpt value: $mountOpt"
         echo "#image value: $image"
         echo "#opcenter value: $opcenter"
