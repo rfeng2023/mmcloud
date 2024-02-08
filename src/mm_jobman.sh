@@ -7,6 +7,7 @@ show_help() {
     echo "Options:"
     echo "  -c <min>:<optional max>                   Specify the min and max of CPUs to use (default and recommended for AWS Spot Instances: 2)."
     echo "  -m <min>:<optional max>                   Set the min and max of memory in GB (default: 16)."
+    echo "  -n <name>                                 Name of job. Leave empty for randomly-generated string (optional)."
     echo "  --cwd <value>                             Define the working directory for the job (default: ~)."
     echo "  --download <remote>:<local>               Download files/folders from S3. Format: <S3 path>:<local path> (optional)."
     echo "  --upload <local>:<remote>                 Upload folders to S3. Format: <local path>:<S3 path> (optional)."
@@ -41,6 +42,7 @@ c_min=2
 c_max=""
 m_min=16
 m_max=""
+name=""
 declare -a mountOpt=()
 image=""
 dryrun=false
@@ -121,6 +123,10 @@ while (( "$#" )); do
       ;;
     --image)
       image="$2"
+      shift 2
+      ;;
+    -n)
+      name="$2"
       shift 2
       ;;
     # --downloadOpt)
@@ -572,6 +578,10 @@ EOF
         if [[ ! -z '$imageVolSize' ]]; then
           full_cmd+=" --imageVolSize $imageVolSize"
         fi
+        if [[ ! -z '$name' ]]; then
+          full_cmd+=" -n $name"
+        fi
+
 
         # Execute or echo the full command
         if [ "$dryrun" = true ]; then
