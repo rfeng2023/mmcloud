@@ -553,7 +553,7 @@ EOF
             job_filename=${TMPDIR:-/tmp}/${script_file%.*}/$j.mmjob.sh
         fi
         printf "$job_script" > $job_filename 
-        full_cmd+="float submit -i '$image' -j $job_filename -c $c_min$c_max -m $m_min$m_max $dataVolume_params $volume_params"
+        full_cmd+="float submit -i '$image' -j $job_filename -c $c_min$c_max -m $m_min$m_max $dataVolume_params $volume_params "
 
         # Added extra parameters if given
         for param in "${extra_parameters[@]}"; do
