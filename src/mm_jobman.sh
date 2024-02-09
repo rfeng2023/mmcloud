@@ -16,9 +16,7 @@ show_help() {
     # echo "  --uploadOpt '<value>'        Options for upload, separated by ',' (optional)."
     echo "  --dryrun                                  Execute a dry run, printing commands without running them."
     echo "  --entrypoint '<command>'                  Set the initial command to run in the job script (required)."
-    echo "  --env <key>=<val>                         Set environmental variables for the job in the format KEY=VALUE (optional)."
     echo "  --image <value>                           Specify the Docker image to use for the job (required)."
-    echo "  --imageVolSize <value>                    Define the size of the image volume in GB (depends on the size of input image)."
     echo "  --job-size <value>                        Set the number of commands per job for creating virtual machines (default: 2)."
     echo "  --mount <bucket>:<local>                  Mount an S3 bucket to a local directory. Format: <bucket>:<local path> (optional)."
     echo "  --mountOpt <value>                        Specify mount options for the bucket (required)."
@@ -57,13 +55,12 @@ declare -a ebs_mount_size=()
 opcenter=""
 entrypoint="date"
 cwd="~"
-env=""
 job_size=2
 parallel_commands=$c_min
-imageVolSize=""
 no_fail="|| { command_failed=1; break; }"
 declare -a download_recursive=()
 declare -a download_include=()
+declare -a extra_parameters=()
 
 while (( "$#" )); do
   case "$1" in
@@ -170,20 +167,12 @@ while (( "$#" )); do
       cwd="$2"
       shift 2
       ;;
-   --env)
-      env="$2"
-      shift 2
-      ;;
    --job-size)
       job_size="$2"
       shift 2
       ;;
    --parallel-commands)
       parallel_commands="$2"
-      shift 2
-      ;;
-   --imageVolSize)
-      imageVolSize="$2"
       shift 2
       ;;
    --no-fail-fast)
@@ -193,14 +182,16 @@ while (( "$#" )); do
    --dryrun)
       dryrun=true
       shift
+      ;; 
+    # We expect the user to understand float cli commands
+    # Therefore, all unsupported flags will be added to the end of the float command as they are
+   -*|--*=)
+      extra_parameters+=("$1" "$2")
+      shift 2
       ;;
     --help)
       show_help
       exit 0
-      ;;
-    -*|--*=) # unsupported flags
-      echo "Error: Unsupported flag $1" >&2
-      exit 1
       ;;
     *)
       SCRIPT_NAME="$1"  # Assume the first non-option argument is the script name
@@ -208,7 +199,6 @@ while (( "$#" )); do
       ;;
   esac
 done
-
 
 check_required_params() {
     local missing_params=""
@@ -565,13 +555,11 @@ EOF
         printf "$job_script" > $job_filename 
         full_cmd+="float submit -i '$image' -j $job_filename -c $c_min$c_max -m $m_min$m_max $dataVolume_params $volume_params"
 
-        # Additional float cli parameters
-        if [[ ! -z '$env' ]]; then
-          full_cmd+=" --env $env"
-        fi
-        if [[ ! -z '$imageVolSize' ]]; then
-          full_cmd+=" --imageVolSize $imageVolSize"
-        fi
+        # Added extra parameters if given
+        for param in "${extra_parameters[@]}"; do
+          full_cmd+="$param "
+        done
+        full_cmd=${full_cmd%\ }
 
         # Execute or echo the full command
         if [ "$dryrun" = true ]; then
@@ -594,7 +582,6 @@ main() {
         echo "#opcenter value: $opcenter"
         echo "#entrypoint value: $entrypoint"
         echo "#cwd value: $cwd"
-        echo "#env values: $env"
         echo "#job-size: $job_size"
         echo "#parallel-commands: $parallel_commands"
         echo "#commands to run:"
