@@ -5,8 +5,8 @@
 show_help() {
     echo "Usage: $0 [options] <script>"
     echo "Options:"
-    echo "  -c <min>:<optional max>                   Specify the min and max of CPUs to use (default and recommended for AWS Spot Instances: 2)."
-    echo "  -m <min>:<optional max>                   Set the min and max of memory in GB (default: 16)."
+    echo "  -c <min>:<optional max>                   Specify the exact number of CPUs to use, or, with ':', the min and max of CPUs to use (default using the smallest AWS Spot Instances: 2)."
+    echo "  -m <min>:<optional max>                   Specify the exact amount of memory to use, or, with ':', the min and max of memory in GB (default: 16)."
     echo "  --cwd <value>                             Define the working directory for the job (default: ~)."
     echo "  --download <remote>:<local>               Download files/folders from S3. Format: <S3 path>:<local path> (optional)."
     echo "  --upload <local>:<remote>                 Upload folders to S3. Format: <local path>:<S3 path> (optional)."
@@ -70,6 +70,7 @@ while (( "$#" )); do
         c_max=:$(echo "$2" | cut -d':' -f2)
       else
         c_min="$2"
+        c_max="$2"
       fi
       parallel_commands=$c_min
       shift 2
@@ -80,6 +81,7 @@ while (( "$#" )); do
         m_max=:$(echo "$2" | cut -d':' -f2)
       else
         m_min="$2"
+        m_max="$2"
       fi
       shift 2
       ;;
