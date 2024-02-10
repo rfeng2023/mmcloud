@@ -475,9 +475,8 @@ submit_each_line_with_mmfloat() {
         fi
         all_commands+="'$line'\n"
         total_commands=$(( total_commands + 1))  
-    done < "$script_file"
+    done < <(sed -e '$a\' $script_file) # always add a newline to the end of file before sending it in
     all_commands=${all_commands%\\n}
-
     # Divide the commands into jobs based on job-size
     num_jobs=$(( ($total_commands + $job_size - 1) / $job_size )) # Ceiling division
     # Loop to create job submission commands
