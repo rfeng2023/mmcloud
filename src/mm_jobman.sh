@@ -2,24 +2,26 @@
 # Gao Wang and MemVerge Inc.
 
 # Help function
+#!/bin/bash
+
+# Help function with updated documentation
 show_help() {
     echo "Usage: $0 [options] <script>"
     echo "Options:"
-    echo "  -c <min>:<optional max>                   Specify the exact number of CPUs to use, or, with ':', the min and max of CPUs to use (default using the smallest AWS Spot Instances: 2)."
-    echo "  -m <min>:<optional max>                   Specify the exact amount of memory to use, or, with ':', the min and max of memory in GB (default: 16)."
+    echo "  -c <min>:<optional max>                   Specify the exact number of CPUs to use, or, with ':', the min and max of CPUs to use. Required."
+    echo "  -m <min>:<optional max>                   Specify the exact amount of memory to use, or, with ':', the min and max of memory in GB. Required."
     echo "  --cwd <value>                             Define the working directory for the job (default: ~)."
     echo "  --download <remote>:<local>               Download files/folders from S3. Format: <S3 path>:<local path> (optional)."
     echo "  --upload <local>:<remote>                 Upload folders to S3. Format: <local path>:<S3 path> (optional)."
-    # echo "  --recursive <true>                        Use the recursive flag for downloading. (optional)."
     echo "  --download-include '<value>'              Use the include flag to include certain files for download (space-separated) (optional)."
     # echo "  --downloadOpt '<value>'      Options for download, separated by ',' (optional)."
     # echo "  --uploadOpt '<value>'        Options for upload, separated by ',' (optional)."
     echo "  --dryrun                                  Execute a dry run, printing commands without running them."
     echo "  --entrypoint '<command>'                  Set the initial command to run in the job script (required)."
     echo "  --image <value>                           Specify the Docker image to use for the job (required)."
-    echo "  --job-size <value>                        Set the number of commands per job for creating virtual machines (default: 2)."
+    echo "  --job-size <value>                        Set the number of commands per job for creating virtual machines (required)."
     echo "  --mount <bucket>:<local>                  Mount an S3 bucket to a local directory. Format: <bucket>:<local path> (optional)."
-    echo "  --mountOpt <value>                        Specify mount options for the bucket (required)."
+    echo "  --mountOpt <value>                        Specify mount options for the bucket (required if --mount is used)."
     echo "  --ebs-mount <folder>=<size>               Mount an EBS volume to a local directory. Format: <local path>=<size>. Size in GB (optional)."
     echo "  --no-fail-fast                            Continue executing subsequent commands even if one fails."
     echo "  --opcenter <value>                        Provide the Opcenter address for the job (required)."
@@ -34,32 +36,30 @@ if [ "$#" -eq 0 ]; then
 fi
 
 # Initialize variables for options with default values
-# CPU = 2 is a good default for AWS Spot instances
-c_min=2
+c_min=""
 c_max=""
-m_min=16
+m_min=""
 m_max=""
 declare -a mountOpt=()
 image=""
-dryrun=false
+entrypoint=""
+cwd="~"
+job_size=""
+opcenter=""
+parallel_commands=""
 declare -a mount_local=()
 declare -a mount_remote=()
 declare -a download_local=()
 declare -a download_remote=()
-declare -a downloadOpt=()
-declare -a uploadOpt=()
+declare -a download_include=()
+#declare -a downloadOpt=()
+#declare -a uploadOpt=()
 declare -a upload_local=()
 declare -a upload_remote=()
 declare -a ebs_mount=()
 declare -a ebs_mount_size=()
-opcenter=""
-entrypoint="date"
-cwd="~"
-job_size=2
-parallel_commands=$c_min
+dryrun=false
 no_fail="|| { command_failed=1; break; }"
-declare -a download_recursive=()
-declare -a download_include=()
 declare -a extra_parameters=()
 
 while (( "$#" )); do
@@ -72,7 +72,7 @@ while (( "$#" )); do
         c_min="$2"
         c_max=":$2"
       fi
-      parallel_commands=$c_min
+      parallel_commands=$c_min  # Default parallel commands to min CPU if not specified
       shift 2
       ;;
     -m)
@@ -85,115 +85,94 @@ while (( "$#" )); do
       fi
       shift 2
       ;;
-    --mountOpt)
-      shift
-      while [ $# -gt 0 ] && [[ $1 != -* ]]; do
-        IFS='' read -ra MOUNT <<< "$1"
-        mountOpt+=("${MOUNT[0]}")
-        shift
-      done
-      ;;
-    --ebs-mount)
-      shift
-      while [ $# -gt 0 ] && [[ $1 != -* ]]; do
-        IFS='=' read -ra PARTS <<< "$1"
-        ebs_mount+=("${PARTS[0]}") 
-        ebs_mount_size+=("${PARTS[1]}")
-        shift
-      done
-      ;;
-    # --recursive)
-    #   shift
-    #   while [ $# -gt 0 ] && [[ $1 != -* ]]; do
-    #     IFS='' read -ra RECURSIVE <<< "$1"
-    #     download_recursive+=("${RECURSIVE[0]}")
-    #     shift
-    #   done
-    #   ;;
-    --download-include)
-      shift
-      while [ $# -gt 0 ] && [[ $1 != -* ]]; do
-        IFS='' read -ra INCLUDE <<< "$1"
-        download_include+=("${INCLUDE[0]}")
-        shift
-      done
-      ;;
     --image)
       image="$2"
       shift 2
       ;;
-    # --downloadOpt)
-    #   shift
-    #   while [ $# -gt 0 ] && [[ $1 != -* ]]; do
-    #     IFS=',' read -ra DOWNLOAD <<< "$1"
-    #     echo "${DOWNLOAD[0]}"
-    #     downloadOpt+=("${DOWNLOAD[0]}")
-    #     shift
-    #   done
-    #   ;;
-    # --uploadOpt)
-    #   shift
-    #   while [ $# -gt 0 ] && [[ $1 != -* ]]; do
-    #     IFS=',' read -ra UPLOAD <<< "$1"
-    #     uploadOpt+=("${UPLOAD[0]}")
-    #     shift
-    #   done
-    #   ;;
-    --mount|--download|--upload)
-      current_flag="$1"
-      shift
-      while [ $# -gt 0 ] && [[ $1 != -* ]]; do
-        IFS=':' read -ra PARTS <<< "$1"
-        if [ "$current_flag" == "--mount" ]; then
-          mount_local+=("${PARTS[1]}")
-          mount_remote+=("${PARTS[0]}")
-        elif [ "$current_flag" == "--download" ]; then
-          download_remote+=("${PARTS[0]}")
-          download_local+=("${PARTS[1]}")
-        elif [ "$current_flag" == "--upload" ]; then
-          upload_local+=("${PARTS[0]}")
-          upload_remote+=("${PARTS[1]}")
-        fi
-        shift
-      done
+    --entrypoint)
+      entrypoint="$2"
+      shift 2
       ;;
     --opcenter)
       opcenter="$2"
       shift 2
       ;;
-   --entrypoint)
-      entrypoint="$2"
-      shift 2
-      ;;
-   --cwd)
-      cwd="$2"
-      shift 2
-      ;;
-   --job-size)
+    --job-size)
       job_size="$2"
       shift 2
       ;;
-   --parallel-commands)
+    --cwd)
+      cwd="$2"
+      shift 2
+      ;;
+    --parallel-commands)
       parallel_commands="$2"
       shift 2
       ;;
-   --no-fail-fast)
-      no_fail="|| true"
-      shift 
+    --mount)
+      while [[ "$2" =~ ":" ]]; do
+        mount_local+=("$(echo "$2" | cut -d':' -f2)")
+        mount_remote+=("$(echo "$2" | cut -d':' -f1)")
+        shift
+      done
+      shift
       ;;
-   --dryrun)
+    --mountOpt)
+      while [ $# -gt 0 ] && [[ $1 != -* ]]; do
+        mountOpt+=("$1")
+        shift
+      done
+      ;;
+    --download)
+      while [[ "$2" =~ ":" ]]; do
+        download_remote+=("$(echo "$2" | cut -d':' -f1)")
+        download_local+=("$(echo "$2" | cut -d':' -f2)")
+        shift
+      done
+      shift
+      ;;
+    --upload)
+      while [[ "$2" =~ ":" ]]; do
+        upload_local+=("$(echo "$2" | cut -d':' -f1)")
+        upload_remote+=("$(echo "$2" | cut -d':' -f2)")
+        shift
+      done
+      shift
+      ;;
+    --download-include)
+      IFS=' ' read -ra download_include <<< "$2"
+      shift 2
+      ;;
+    --ebs-mount)
+      while [[ "$2" =~ "=" ]]; do
+        ebs_mount+=("$(echo "$2" | cut -d'=' -f1)")
+        ebs_mount_size+=("$(echo "$2" | cut -d'=' -f2)")
+        shift
+      done
+      shift
+      ;;
+    --dryrun)
       dryrun=true
       shift
-      ;; 
-    # We expect the user to understand float cli commands
-    # Therefore, all unsupported flags will be added to the end of the float command as they are
-   -*|--*=)
-      extra_parameters+=("$1" "$2")
-      shift 2
+      ;;
+    --no-fail-fast)
+      no_fail="|| true"
+      shift
       ;;
     --help)
       show_help
       exit 0
+      ;;
+    # We expect the user to understand float cli commands
+    # Therefore, all unsupported flags will be added to the end of the float command as they are
+    -*|--*=)  # Unsupported flags
+      extra_parameters+=("$1")  # Add the unsupported flag to extra_parameters
+      shift  # Move past the flag
+      # Add all subsequent arguments until the next flag to extra_parameters
+      while [ $# -gt 0 ] && ! [[ "$1" =~ ^- ]]; do
+        extra_parameters+=("$1")
+        shift
+      done
       ;;
     *)
       SCRIPT_NAME="$1"  # Assume the first non-option argument is the script name
@@ -202,28 +181,33 @@ while (( "$#" )); do
   esac
 done
 
+# Function to check for required parameters
 check_required_params() {
     local missing_params=""
     local is_missing=false
 
+    if [ -z "$c_min" ]; then
+        missing_params+="-c, "
+        is_missing=true
+    fi
+    if [ -z "$m_min" ]; then
+        missing_params+="-m, "
+        is_missing=true
+    fi
     if [ -z "$image" ]; then
         missing_params+="--image, "
         is_missing=true
     fi
-    if [ -z "$mountOpt" ]; then
-        missing_params+="--mountOpt, "
+    if [ -z "$job_size" ]; then
+        missing_params+="--job-size, "
         is_missing=true
     fi
     if [ -z "$opcenter" ]; then
         missing_params+="--opcenter, "
         is_missing=true
     fi
-    if [ -z "$entrypoint" ]; then
-        missing_params+="--entrypoint, "
-        is_missing=true
-    fi
-    if [ ${#mount_local[@]} -eq 0 ]; then
-        missing_params+="--mount, "
+    if [[ ${#mount_local[@]} -gt 0 && ${#mountOpt[@]} -eq 0 ]]; then
+        missing_params+="--mountOpt (required with --mount), "
         is_missing=true
     fi
 
@@ -231,7 +215,7 @@ check_required_params() {
     missing_params=${missing_params%, }
 
     if [ "$is_missing" = true ]; then
-        echo "Error: Missing required parameters: $missing_params"
+        echo "Error: Missing required parameters: $missing_params" >&2
         show_help
         exit 1
     fi
@@ -268,14 +252,6 @@ create_download_commands() {
       fi
       download_cmd+="aws s3 cp s3://${download_remote[$i]} ${download_local[$i]} --recursive"
 
-      # If number of recursive or include is less than download commands, they just won't be added
-      # if [ ${#download_recursive[@]} -gt 0 ]; then
-      #   # Split by space
-      #   IFS=' ' read -ra RECURSIVES <<< "${download_recursive[$i]}"
-      #   for j in "${!RECURSIVES[@]}"; do
-      #     download_cmd+=" --recursive"
-      #   done
-      # fi
       # Separate include commands with space
       if [ ${#download_include[@]} -gt 0 ]; then
         # Split by space
@@ -433,6 +409,31 @@ mount_volumes() {
   echo -e $volumeMount_cmd
 }
 
+calculate_max_parallel_jobs() {
+    # Required minimum resources per job
+    min_cores_per_cmd=$1  # Minimum CPU cores required per job
+    min_mem_per_cmd=$2    # Minimum memory required per job in GB
+
+    # Available system resources
+    available_cores=$(nproc)  # Total available CPU cores
+    echo "Available CPU cores: $avaliable_cores"
+    available_memory_gb=$(free -m | grep Mem: | awk '{print $2}' | awk '{printf "%.0f", $1/1024}')  # Total available memory in GB
+    echo "Available Memory: $available_memory_gb GB"
+
+    # Calculate the maximum number of jobs based on CPU and memory constraints
+    max_jobs_by_cpu=$((available_cores / min_cores_per_cmd))
+    max_jobs_by_mem=$((available_memory_gb / min_mem_per_cmd))
+
+    # Determine the limiting factor and set the maximum number of parallel jobs
+    if [ $max_jobs_by_cpu -le $max_jobs_by_mem ]; then
+        max_parallel_jobs=$max_jobs_by_cpu
+    else
+        max_parallel_jobs=$max_jobs_by_mem
+    fi
+
+    echo "Maximum parallel jobs: $max_parallel_jobs"
+}
+
 submit_each_line_with_mmfloat() {
     local script_file="$1"
     local download_cmd=""
@@ -585,6 +586,7 @@ main() {
         echo "#cwd value: $cwd"
         echo "#job-size: $job_size"
         echo "#parallel-commands: $parallel_commands"
+        echo "#extra float parameters: $extra_parameters"
         echo "#commands to run:"
     fi
     submit_each_line_with_mmfloat "$SCRIPT_NAME"
