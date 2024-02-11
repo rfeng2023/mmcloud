@@ -46,8 +46,8 @@ cwd="~"
 job_size=""
 opcenter=""
 parallel_commands=""
-min_cores_per_command=""
-min_mem_per_command=""
+min_cores_per_command=0
+min_mem_per_command=0
 declare -a mount_local=()
 declare -a mount_remote=()
 declare -a download_local=()
@@ -61,6 +61,7 @@ declare -a ebs_mount=()
 declare -a ebs_mount_size=()
 dryrun=false
 no_fail="|| { command_failed=1; break; }"
+no_fail_parallel="--halt now,fail=1 || { command_failed=1 }"
 declare -a extra_parameters=()
 
 while (( "$#" )); do
@@ -172,6 +173,7 @@ while (( "$#" )); do
       ;;
     --no-fail-fast)
       no_fail="|| true"
+      no_fail_parallel="--halt soon,fail=1 || true"
       shift
       ;;
     --help)
@@ -236,7 +238,7 @@ check_required_params() {
     fi
 
     # Additional check for --parallel-commands when --min-cores-per-command or --min-mem-per-command is specified
-    if [[ -n "$min_cores_per_command" || -n "$min_mem_per_command" ]] && [[ "$parallel_commands" -gt 0 ]]; then
+    if [[ "$min_cores_per_command" -gt 0 || "$min_mem_per_command" -gt 0 ]] && [[ "$parallel_commands" -gt 0 ]]; then
         echo "Error: --parallel-commands must be set to 0 for automatic determination when --min-cores-per-command or --min-mem-per-command is specified."
         exit 1
     fi
@@ -370,28 +372,6 @@ create_upload_commands() {
   echo -e $upload_cmd
 }
 
-generate_parallel_commands() {
-  local job_commands=$1
-  
-  IFS=$'\n' read -d '' -ra array <<< "$(echo "$job_commands" | grep -o -E "'([^']+)'")"
-  local start=0
-  substring=''
-
-  # If parallel_commands is 1, or if only one remainder command,
-  # No need for `parallel`
-  end_val=${#array[@]}
-  if [ $parallel_commands -ne 1 ] && [ $((end_val - start)) -ne 1 ]; then
-    substring+="parallel -j $parallel_commands :::"
-  fi
-  for ((i = start; i < end_val; i++)); do
-    substring+=" "
-    substring+="${array[i]}"
-  done
-
-  substring+='\n'
-  echo -e $substring
-}
-
 mount_buckets() {
   local dataVolume_cmd=""
 
@@ -434,25 +414,49 @@ calculate_max_parallel_jobs() {
     # Required minimum resources per job
     min_cores_per_cmd=$1  # Minimum CPU cores required per job
     min_mem_per_cmd=$2    # Minimum memory required per job in GB
+    default_parallel_commands=$3  # Default number of parallel commands if calculations yield zero
 
     # Available system resources
     available_cores=$(nproc)  # Total available CPU cores
-    echo "Available CPU cores: $avaliable_cores"
+    echo "Available CPU cores: $available_cores"
     available_memory_gb=$(free -m | grep Mem: | awk '{print $2}' | awk '{printf "%.0f", $1/1024}')  # Total available memory in GB
     echo "Available Memory: $available_memory_gb GB"
 
-    # Calculate the maximum number of jobs based on CPU and memory constraints
-    max_jobs_by_cpu=$((available_cores / min_cores_per_cmd))
-    max_jobs_by_mem=$((available_memory_gb / min_mem_per_cmd))
+    # Initialize max jobs by CPU and memory
+    max_jobs_by_cpu=0
+    max_jobs_by_mem=0
 
-    # Determine the limiting factor and set the maximum number of parallel jobs
-    if [ $max_jobs_by_cpu -le $max_jobs_by_mem ]; then
+    # Calculate the maximum number of jobs based on CPU constraints, if applicable
+    if [ -n "$min_cores_per_cmd" ] && [ "$min_cores_per_cmd" -gt 0 ]; then
+        max_jobs_by_cpu=$((available_cores / min_cores_per_cmd))
+    fi
+
+    # Calculate the maximum number of jobs based on memory constraints, if applicable
+    if [ -n "$min_mem_per_cmd" ] && [ "$min_mem_per_cmd" -gt 0 ]; then
+        max_jobs_by_mem=$((available_memory_gb / min_mem_per_cmd))
+    fi
+
+    # Determine the maximum number of parallel jobs based on the more restrictive resource (CPU or memory)
+    if [ "$max_jobs_by_cpu" -gt 0 ] && [ "$max_jobs_by_mem" -gt 0 ]; then
+        max_parallel_jobs=$(( max_jobs_by_cpu < max_jobs_by_mem ? max_jobs_by_cpu : max_jobs_by_mem ))
+    elif [ "$max_jobs_by_cpu" -gt 0 ]; then
         max_parallel_jobs=$max_jobs_by_cpu
-    else
+    elif [ "$max_jobs_by_mem" -gt 0 ]; then
         max_parallel_jobs=$max_jobs_by_mem
+    else
+        max_parallel_jobs=0
+    fi
+
+    if [ "$max_parallel_jobs" -eq 0 ] && [ "$default_parallel_commands" -ne 0 ]; then
+        # Use default_parallel_commands if max_parallel_jobs is zero and default_parallel_commands is not zero
+        max_parallel_jobs=$default_parallel_commands
+    elif [ "$max_parallel_jobs" -eq 0 ] && [ "$default_parallel_commands" -eq 0 ]; then
+        # If both max_parallel_jobs and default_parallel_commands are zero, return 1
+        max_parallel_jobs=1
     fi
 
     echo "Maximum parallel jobs: $max_parallel_jobs"
+    echo -e $max_parallel_jobs
 }
 
 submit_each_line_with_mmfloat() {
@@ -503,38 +507,34 @@ submit_each_line_with_mmfloat() {
     all_commands=${all_commands%\\n}
     # Divide the commands into jobs based on job-size
     num_jobs=$(( ($total_commands + $job_size - 1) / $job_size )) # Ceiling division
+    echo $all_commands
     # Loop to create job submission commands
     for (( j = 1; j < $num_jobs + 1; j++ )); do
         full_cmd=""
         # Using a sliding-window effect, take the next job_size number of jobs
         start=$((($j - 1) * $job_size + 1))
         end=$(($start + $job_size - 1))
-        job_commands=$(echo -e "$all_commands" | sed -n "$start,${end}p")
-
-        # Extract commands to use with `parallel`
-        paralleled=$(generate_parallel_commands "$job_commands")
-        paralleled=${paralleled%&&}
+        commands=$(echo -e "$all_commands" | sed -n "$start,${end}p")
+        # Replacing single quotes with double quotes
+        # Because job script submitted removes single quotes
+        commands=${commands//\'/\"}
 
         # Add the mmfloat submit command for each line
         if [ "$dryrun" = true ]; then
             full_cmd+="#-------------\n"
         fi
 
-        # Replacing single quotes with double quotes
-        # Because job script submitted removes single quotes
-        subline=$(echo -e "$paralleled")
-        subline=${subline//\'/\"}
-        # If no `parallel` in the line, no need for any quotation marks
-        # as it a singular command
-        # Use < > markers to remove quotation marks
-        subline=${subline//\<\"/}
-        subline=${subline//\">/}
-
         # Create the job script using heredoc
-        job_script=$(cat << EOF
+        calculate_max_parallel_jobs_def=$(declare -f calculate_max_parallel_jobs)
+        commands_string=$(printf "%s\n" "${commands[@]}")
+        job_script=$(cat << 'EOF'
 #!/bin/bash
 
 set -o errexit -o pipefail
+
+# Function definition for calculate_max_parallel_jobs
+${calculate_max_parallel_jobs_def}
+
 # Activate environment with entrypoint in job script
 ${entrypoint}
 
@@ -551,14 +551,20 @@ ${download_cmd}
 # Change to the specified working directory
 cd ${cwd}
 
-# Initialize a flag to track command success
-# which can be changed in $no_fail
+# Compute parallel command numbers based on runtime values
+num_parallel_commands=\$(calculate_max_parallel_jobs ${min_cores_per_command} ${min_mem_per_command} ${default_parallel_commands})
+
+# Initialize a flag to track command success, which can be changed in no_fail
 command_failed=0
-{
-    while IFS= read -r command; do
-        eval \$command $no_fail
-    done <<< '''${subline}'''
-}
+
+# Conditional execution based on num_parallel_commands
+if [ "\$num_parallel_commands" -gt 1 ]; then
+    printf "%s\n" '''${commands_string}''' | parallel -j "\$num_parallel_commands" ${no_fail_parallel}
+else
+    while IFS= read -r cmd; do
+        eval \$cmd ${no_fail}
+    done <<< '''$commands_string'''
+fi
 
 # Always execute the upload commands to upload data to S3
 ${upload_cmd}
@@ -569,6 +575,9 @@ if [ \$command_failed -eq 1 ]; then
 fi
 EOF
 )
+
+# Note: Replace ${commands[@]} with the actual way you're passing commands to the script.
+
         if [ "$dryrun" = true ]; then
             job_filename=${script_file%.*}_"$j".mmjob.sh 
         else
