@@ -70,7 +70,7 @@ while (( "$#" )); do
         c_max=:$(echo "$2" | cut -d':' -f2)
       else
         c_min="$2"
-        c_max="$2"
+        c_max=":$2"
       fi
       parallel_commands=$c_min
       shift 2
@@ -81,7 +81,7 @@ while (( "$#" )); do
         m_max=:$(echo "$2" | cut -d':' -f2)
       else
         m_min="$2"
-        m_max="$2"
+        m_max=":$2"
       fi
       shift 2
       ;;
