@@ -2,9 +2,6 @@
 # Gao Wang and MemVerge Inc.
 
 # Help function
-#!/bin/bash
-
-# Help function with updated documentation
 show_help() {
     echo "Usage: $0 [options] <script>"
     echo "Options:"
@@ -25,7 +22,9 @@ show_help() {
     echo "  --ebs-mount <folder>=<size>               Mount an EBS volume to a local directory. Format: <local path>=<size>. Size in GB (optional)."
     echo "  --no-fail-fast                            Continue executing subsequent commands even if one fails."
     echo "  --opcenter <value>                        Provide the Opcenter address for the job (required)."
-    echo "  --parallel-commands <value>               Set the number of commands to run in parallel (default: number of CPUs)."
+    echo "  --parallel-commands <value>               Set the number of commands to run in parallel (default: min number of CPUs)."
+    echo "  --min-cores-per-command <value>           Specify the minimum number of CPU cores required per command (optional)."
+    echo "  --min-mem-per-command <value>             Specify the minimum amount of memory in GB required per command (optional)."
     echo "  --help                                    Show this help message."
 }
 
@@ -47,13 +46,15 @@ cwd="~"
 job_size=""
 opcenter=""
 parallel_commands=""
+min_cores_per_command=""
+min_mem_per_command=""
 declare -a mount_local=()
 declare -a mount_remote=()
 declare -a download_local=()
 declare -a download_remote=()
 declare -a download_include=()
-#declare -a downloadOpt=()
-#declare -a uploadOpt=()
+# declare -a downloadOpt=()
+# declare -a uploadOpt=()
 declare -a upload_local=()
 declare -a upload_remote=()
 declare -a ebs_mount=()
@@ -67,10 +68,13 @@ while (( "$#" )); do
     -c)
       if [[ "$2" =~ ":" ]]; then
         c_min=$(echo "$2" | cut -d':' -f1)
-        c_max=:$(echo "$2" | cut -d':' -f2)
+        c_max=$(echo "$2" | cut -d':' -f2)
+        if [ -n "$c_max" ]; then
+          c_max=":${c_max}"
+        fi
       else
         c_min="$2"
-        c_max=":$2"
+        c_max=""
       fi
       parallel_commands=$c_min  # Default parallel commands to min CPU if not specified
       shift 2
@@ -78,10 +82,13 @@ while (( "$#" )); do
     -m)
       if [[ "$2" =~ ":" ]]; then
         m_min=$(echo "$2" | cut -d':' -f1)
-        m_max=:$(echo "$2" | cut -d':' -f2)
+        m_max=$(echo "$2" | cut -d':' -f2)
+        if [ -n "$m_max" ]; then
+          m_max=":${m_max}"
+        fi
       else
         m_min="$2"
-        m_max=":$2"
+        m_max=""
       fi
       shift 2
       ;;
@@ -107,6 +114,14 @@ while (( "$#" )); do
       ;;
     --parallel-commands)
       parallel_commands="$2"
+      shift 2
+      ;;
+    --min-cores-per-command)
+      min_cores_per_command="$2"
+      shift 2
+      ;;
+    --min-mem-per-command)
+      min_mem_per_command="$2"
       shift 2
       ;;
     --mount)
@@ -163,11 +178,11 @@ while (( "$#" )); do
       show_help
       exit 0
       ;;
-    # We expect the user to understand float cli commands
-    # Therefore, all unsupported flags will be added to the end of the float command as they are
     -*|--*=)  # Unsupported flags
       extra_parameters+=("$1")  # Add the unsupported flag to extra_parameters
       shift  # Move past the flag
+      # We expect the user to understand float cli commands
+      # Therefore, all unsupported flags will be added to the end of the float command as they are
       # Add all subsequent arguments until the next flag to extra_parameters
       while [ $# -gt 0 ] && ! [[ "$1" =~ ^- ]]; do
         extra_parameters+=("$1")
@@ -217,6 +232,12 @@ check_required_params() {
     if [ "$is_missing" = true ]; then
         echo "Error: Missing required parameters: $missing_params" >&2
         show_help
+        exit 1
+    fi
+
+    # Additional check for --parallel-commands when --min-cores-per-command or --min-mem-per-command is specified
+    if [[ -n "$min_cores_per_command" || -n "$min_mem_per_command" ]] && [[ "$parallel_commands" -gt 0 ]]; then
+        echo "Error: --parallel-commands must be set to 0 for automatic determination when --min-cores-per-command or --min-mem-per-command is specified."
         exit 1
     fi
 
