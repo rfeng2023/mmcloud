@@ -125,56 +125,73 @@ while (( "$#" )); do
       min_mem_per_command="$2"
       shift 2
       ;;
-    --mount)
+    --no-fail-fast)
+      no_fail="|| true"
+      no_fail_parallel="--halt soon,fail=1 || true"
       shift
-      while [ $# -gt 0 ] && [[ $1 != -* ]]; do
-        mount_local+=("$(echo "$2" | cut -d':' -f2)")
-        mount_remote+=("$(echo "$2" | cut -d':' -f1)")
-        shift
-      done
       ;;
     --mountOpt)
       shift
       while [ $# -gt 0 ] && [[ $1 != -* ]]; do
-        mountOpt+=("$1")
+        IFS='' read -ra MOUNT <<< "$1"
+        mountOpt+=("${MOUNT[0]}")
         shift
       done
-      ;;
-    --download)
-      shift
-      while [ $# -gt 0 ] && [[ $1 != -* ]]; do
-        download_remote+=("$(echo "$2" | cut -d':' -f1)")
-        download_local+=("$(echo "$2" | cut -d':' -f2)")
-        shift
-      done
-      ;;
-    --upload)
-      shift
-      while [ $# -gt 0 ] && [[ $1 != -* ]]; do
-        upload_local+=("$(echo "$2" | cut -d':' -f1)")
-        upload_remote+=("$(echo "$2" | cut -d':' -f2)")
-        shift
-      done
-      ;;
-    --download-include)
-      IFS=' ' read -ra download_include <<< "$2"
-      shift 2
       ;;
     --ebs-mount)
       shift
       while [ $# -gt 0 ] && [[ $1 != -* ]]; do
-        ebs_mount+=("$(echo "$2" | cut -d'=' -f1)")
-        ebs_mount_size+=("$(echo "$2" | cut -d'=' -f2)")
+        IFS='=' read -ra PARTS <<< "$1"
+        ebs_mount+=("${PARTS[0]}") 
+        ebs_mount_size+=("${PARTS[1]}")
+        shift
+      done
+      ;;
+    --download-include)
+      shift
+      while [ $# -gt 0 ] && [[ $1 != -* ]]; do
+        IFS='' read -ra INCLUDE <<< "$1"
+        download_include+=("${INCLUDE[0]}")
+        shift
+      done
+      ;;
+    # --downloadOpt)
+    #   shift
+    #   while [ $# -gt 0 ] && [[ $1 != -* ]]; do
+    #     IFS=',' read -ra DOWNLOAD <<< "$1"
+    #     echo "${DOWNLOAD[0]}"
+    #     downloadOpt+=("${DOWNLOAD[0]}")
+    #     shift
+    #   done
+    #   ;;
+    # --uploadOpt)
+    #   shift
+    #   while [ $# -gt 0 ] && [[ $1 != -* ]]; do
+    #     IFS=',' read -ra UPLOAD <<< "$1"
+    #     uploadOpt+=("${UPLOAD[0]}")
+    #     shift
+    #   done
+    #   ;;
+    --mount|--download|--upload)
+      current_flag="$1"
+      shift
+      while [ $# -gt 0 ] && [[ $1 != -* ]]; do
+        IFS=':' read -ra PARTS <<< "$1"
+        if [ "$current_flag" == "--mount" ]; then
+          mount_local+=("${PARTS[1]}")
+          mount_remote+=("${PARTS[0]}")
+        elif [ "$current_flag" == "--download" ]; then
+          download_remote+=("${PARTS[0]}")
+          download_local+=("${PARTS[1]}")
+        elif [ "$current_flag" == "--upload" ]; then
+          upload_local+=("${PARTS[0]}")
+          upload_remote+=("${PARTS[1]}")
+        fi
         shift
       done
       ;;
     --dryrun)
       dryrun=true
-      shift
-      ;;
-    --no-fail-fast)
-      no_fail="|| true"
-      no_fail_parallel="--halt soon,fail=1 || true"
       shift
       ;;
     --help)
