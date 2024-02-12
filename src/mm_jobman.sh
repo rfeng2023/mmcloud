@@ -575,8 +575,10 @@ echo "Maximum parallel jobs: \$num_parallel_commands"
 command_failed=0
 
 # Conditional execution based on num_parallel_commands and also length of commands
-if [[ "\$num_parallel_commands" -gt 1 && "${#commands[@]}" -gt 1 ]]; then
-    printf "%%s\\\\n" ${commands[@]} | parallel -j "\$num_parallel_commands" ${no_fail_parallel}
+# FIXME: length of commands does not work -- syntax not correct, need test and fix. Comment out for now
+# if [[ \$num_parallel_commands -gt 1 && ${#commands[@]} -gt 1 ]]; then
+if [[ \$num_parallel_commands -gt 1 ]]; then
+    printf "%%s\\\\n" ${commands[@]} | parallel -j \$num_parallel_commands ${no_fail_parallel}
 else
     printf "%%s\\\\n" ${commands[@]} | while IFS= read -r cmd; do
         eval \$cmd ${no_fail}
