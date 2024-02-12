@@ -555,8 +555,8 @@ echo "Maximum parallel jobs: \$num_parallel_commands"
 # Initialize a flag to track command success, which can be changed in no_fail
 command_failed=0
 
-# Conditional execution based on num_parallel_commands
-if [ "\$num_parallel_commands" -gt 1 ]; then
+# Conditional execution based on num_parallel_commands and also length of commands
+if [[ "\$num_parallel_commands" -gt 1 && "${#commands[@]}" -gt 1 ]]; then
     printf "%%s\\\\n" ${commands[@]} | parallel -j "\$num_parallel_commands" ${no_fail_parallel}
 else
     printf "%%s\\\\n" ${commands[@]} | while IFS= read -r cmd; do
