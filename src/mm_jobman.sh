@@ -531,6 +531,7 @@ submit_each_line_with_mmfloat() {
         start=$((($j - 1) * $job_size + 1))
         end=$(($start + $job_size - 1))
         commands=$(echo -e "$all_commands" | sed -n "$start,${end}p" | tr '\n' ' ')
+        commands_length=$(eval "array=($commands); echo \${#array[@]}")
         # Replacing single quotes with double quotes
         # Because job script submitted removes single quotes
         # commands=${commands//\'/\"}
@@ -576,11 +577,12 @@ command_failed=0
 
 # Conditional execution based on num_parallel_commands and also length of commands
 # FIXME: length of commands does not work -- syntax not correct, need test and fix. Comment out for now
-# if [[ \$num_parallel_commands -gt 1 && ${#commands[@]} -gt 1 ]]; then
-if [[ \$num_parallel_commands -gt 1 ]]; then
-    printf "%%s\\\\n" ${commands[@]} | parallel -j \$num_parallel_commands ${no_fail_parallel}
+# if [[ \$num_parallel_commands -gt 1 ]]; then
+commands_to_run=${commands}
+if [[ \$num_parallel_commands -gt 1 && ${commands_length} -gt 1 ]]; then
+    printf "%%s\\\\n" \$commands_to_run | parallel -j \$num_parallel_commands ${no_fail_parallel}
 else
-    printf "%%s\\\\n" ${commands[@]} | while IFS= read -r cmd; do
+    printf "%%s\\\\n" \$commands_to_run | while IFS= read -r cmd; do
         eval \$cmd ${no_fail}
     done
 fi
