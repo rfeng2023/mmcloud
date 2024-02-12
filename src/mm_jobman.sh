@@ -435,7 +435,9 @@ calculate_max_parallel_jobs() {
 
     # Available system resources
     available_cores=$(nproc)  # Total available CPU cores
-    available_memory_gb=$(free -m | grep Mem: | awk '{print $2}' | awk '{print int($1/1024)}')
+    # available_memory_gb=$(free -m | grep Mem: | awk '{print $2}' | awk '{print int($1/1024)}')
+    available_memory_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+    available_memory_gb=$((available_memory_kb / 1024 / 1024))
 
     # Initialize max_parallel_jobs to default parallen_commands
     max_parallel_jobs=$3
