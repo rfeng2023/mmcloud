@@ -512,25 +512,35 @@ submit_each_line_with_mmfloat() {
     volume_params=$(mount_volumes)
 
     # Read all lines from the script file into an array
-    all_commands=""
+        all_commands=()
     total_commands=0
     while IFS= read -r line; do
         if [ -z "$line" ]; then
             continue  # Skip empty lines
         fi
-        all_commands+="'$line'\n"
+        all_commands+=("$line")
         total_commands=$(( total_commands + 1))  
     done < <(sed -e '$a\' $script_file) # always add a newline to the end of file before sending it in
-    all_commands=${all_commands%\\n}
+
     # Divide the commands into jobs based on job-size
     num_jobs=$(( ($total_commands + $job_size - 1) / $job_size )) # Ceiling division
     # Loop to create job submission commands
-    for (( j = 1; j < $num_jobs + 1; j++ )); do
+    for (( j = 0; j < $num_jobs; j++ )); do
         full_cmd=""
         # Using a sliding-window effect, take the next job_size number of jobs
-        start=$((($j - 1) * $job_size + 1))
+        start=$(($j * $job_size))
         end=$(($start + $job_size - 1))
-        commands=$(echo -e "$all_commands" | sed -n "$start,${end}p" | tr '\n' ' ')
+
+        commands=()
+        i=$start
+        while [[ $i -le $end && $i -lt ${#all_commands[*]} ]]; do
+          commands+=("'${all_commands[$i]}'")
+          i=$(( i + 1 ))
+        done
+
+        
+        # commands=$(echo -e "$all_commands" | sed -n "$start,${end}p" | tr '\n' ' ')
+        # commands_length=$(eval "array=($commands); echo \${#array[@]}")
         # Replacing single quotes with double quotes
         # Because job script submitted removes single quotes
         # commands=${commands//\'/\"}
@@ -576,11 +586,12 @@ command_failed=0
 
 # Conditional execution based on num_parallel_commands and also length of commands
 # FIXME: length of commands does not work -- syntax not correct, need test and fix. Comment out for now
-# if [[ \$num_parallel_commands -gt 1 && ${#commands[@]} -gt 1 ]]; then
-if [[ \$num_parallel_commands -gt 1 ]]; then
-    printf "%%s\\\\n" ${commands[@]} | parallel -j \$num_parallel_commands ${no_fail_parallel}
+# if [[ \$num_parallel_commands -gt 1 ]]; then
+commands_to_run=${commands[@]}
+if [[ \$num_parallel_commands -gt 1 && ${#commands[*]} -gt 1 ]]; then
+    printf "%%s\\\\n" \$commands_to_run | parallel -j \$num_parallel_commands ${no_fail_parallel}
 else
-    printf "%%s\\\\n" ${commands[@]} | while IFS= read -r cmd; do
+    printf "%%s\\\\n" \$commands_to_run | while IFS= read -r cmd; do
         eval \$cmd ${no_fail}
     done
 fi
