@@ -61,7 +61,7 @@ declare -a ebs_mount=()
 declare -a ebs_mount_size=()
 dryrun=false
 no_fail="|| { command_failed=1; break; }"
-no_fail_parallel="--halt now,fail=1 || { command_failed=1 }"
+no_fail_parallel="--halt now,fail=1 || { command_failed=1; }"
 declare -a extra_parameters=()
 
 while (( "$#" )); do
@@ -534,7 +534,7 @@ submit_each_line_with_mmfloat() {
         commands=()
         i=$start
         while [[ $i -le $end && $i -lt ${#all_commands[*]} ]]; do
-          commands+=("'${all_commands[$i]}'")
+          commands+=("\"${all_commands[$i]}\"")
           i=$(( i + 1 ))
         done
 
@@ -585,11 +585,11 @@ echo "Maximum parallel jobs: \$num_parallel_commands"
 command_failed=0
 
 # Conditional execution based on num_parallel_commands and also length of commands
-commands_to_run=${commands[@]}
+commands_to_run=(${commands[@]})
 if [[ \$num_parallel_commands -gt 1 && ${#commands[*]} -gt 1 ]]; then
-    printf "%%s\\\\n" \$commands_to_run | parallel -j \$num_parallel_commands ${no_fail_parallel}
+    printf "%%s\\\\n" "\${commands_to_run[@]}"  | parallel -j \$num_parallel_commands ${no_fail_parallel}
 else
-    printf "%%s\\\\n" \$commands_to_run | while IFS= read -r cmd; do
+    printf "%%s\\\\n" "\${commands_to_run[@]}" | while IFS= read -r cmd; do
         eval \$cmd ${no_fail}
     done
 fi
