@@ -127,7 +127,7 @@ while (( "$#" )); do
       ;;
     --no-fail-fast)
       no_fail="|| true"
-      no_fail_parallel="--halt soon,fail=50% || true"
+      no_fail_parallel="--halt never || true"
       shift
       ;;
     --mountOpt)
