@@ -512,7 +512,7 @@ submit_each_line_with_mmfloat() {
     volume_params=$(mount_volumes)
 
     # Read all lines from the script file into an array
-        all_commands=()
+    all_commands=()
     total_commands=0
     while IFS= read -r line; do
         if [ -z "$line" ]; then
@@ -538,14 +538,6 @@ submit_each_line_with_mmfloat() {
           i=$(( i + 1 ))
         done
 
-        
-        # commands=$(echo -e "$all_commands" | sed -n "$start,${end}p" | tr '\n' ' ')
-        # commands_length=$(eval "array=($commands); echo \${#array[@]}")
-        # Replacing single quotes with double quotes
-        # Because job script submitted removes single quotes
-        # commands=${commands//\'/\"}
-
-        # Add the mmfloat submit command for each line
         if [ "$dryrun" = true ]; then
             full_cmd+="#-------------\n"
         fi
@@ -603,9 +595,6 @@ if [ \$command_failed -eq 1 ]; then
 fi
 EOF
 )
-
-# Note: Replace ${commands[@]} with the actual way you're passing commands to the script.
-
         if [ "$dryrun" = true ]; then
             job_filename=${script_file%.*}_"$j".mmjob.sh 
         else
