@@ -61,3 +61,27 @@ The parameters including:
 - `-m|--mem` default is `16`
 - `-pub|--publish` default is `8888:8888`
 - `-sg|--securityGroup` default
+
+## Example `hpc_jobman.sh` command
+
+This is designed for submitting jobs to our HPC.
+
+```
+bash src/hpc_jobman.sh commands_to_submit.txt \
+   -c 3 -m 32 --cwd ~/output \
+   --walltime 40:00:00 --queue csg.q \
+   --entrypoint "source ~/mamba_activate.sh" \
+   --job-size 3 --job-name susie_rss_gwas \
+   --no-fail-fast --dryrun 
+```
+
+run the example command exactly as is, on your Mac is fine, or HPC. You should see screen output like this:
+
+```
+#-------------
+qsub /home/gw/Downloads/commands_to_submit_0.mmjob.sh
+```
+
+check the contents of `commands_to_submit_0.mmjob.sh` to understand what it is. Then you can use this for analysis on the cluster to submit eg 1300 jobs. To do so, you can put `--job-size 20`  so you will submit 1300 / 20 = 65 jobs. Each of these jobs will use 3 CPU and 32 G of memory, which you can change. If you use multiple CPU, the jobs will be running in parallel by batches of size specified by `--parallel-commands`, default value set to `-c`. 
+
+Once you are comfortable with the outcome of the `--dryrun`, you can remove `--dryrun` and run on the HPC, which will submit all the jobs.
