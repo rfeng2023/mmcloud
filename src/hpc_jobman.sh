@@ -117,6 +117,12 @@ submit_jobs_with_qsub() {
         return 1
     fi
 
+    # Check if the script file is empty
+    if [ ! -s "$script_file" ]; then
+        echo "Script file is empty: $script_file"
+        return 0
+    fi
+
     # Read all lines from the script file into an array
     all_commands=()
     total_commands=0

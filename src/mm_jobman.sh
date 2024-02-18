@@ -490,6 +490,12 @@ submit_each_line_with_mmfloat() {
         return 1
     fi
 
+    # Check if the script file is empty
+    if [ ! -s "$script_file" ]; then
+        echo "Script file is empty: $script_file"
+        return 0
+    fi
+
     # Only create download and upload commands if there are corresponding parameters
     if [ ${#download_local[@]} -ne 0 ]; then
         download_cmd=$(create_download_commands)
