@@ -10,8 +10,6 @@ default_mem=16
 default_publish="8888:8888"
 default_securityGroup="sg-038d1e15159af04a1"
 default_include_dataVolume="yes"
-default_mountMode=""  # Default value is empty for mount mode
-default_entrypoint="" # Default value is empty for entrypoint
 
 # Initialize variables to empty for user and password
 user=""
@@ -27,8 +25,6 @@ mem="$default_mem"
 publish="$default_publish"
 securityGroup="$default_securityGroup"
 include_dataVolume="$default_include_dataVolume"
-mountMode="$default_mountMode"
-entrypoint="$default_entrypoint"
 
 # Parse command line options
 while [[ "$#" -gt 0 ]]; do
@@ -44,8 +40,6 @@ while [[ "$#" -gt 0 ]]; do
         -pub|--publish) publish="$2"; shift ;;
         -sg|--securityGroup) securityGroup="$2"; shift ;;
         -dv|--dataVolume) include_dataVolume="$2"; shift ;;
-        -mm|--mountMode) mountMode="$2"; shift ;; # Added mount mode option
-        -e|--entrypoint) entrypoint="$2"; shift ;; # Added entrypoint option
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
@@ -75,28 +69,15 @@ if [[ $include_dataVolume == "yes" ]]; then
         echo "VM_path is not provided. The default will be used: $default_VM_path"
         VM_path=$default_VM_path
     fi
-    # When constructing the float submit command, include the mount mode and entrypoint if they are specified
-    if [[ ! -z "$mountMode" ]]; then
-        dataVolumeOption+=" --mountMode $mountMode"
-    fi
 
     # Construct the dataVolumeOption with either the specified or default values
-    dataVolumeOption="--dataVolume '${s3_path}:${VM_path}'"
+    dataVolumeOption="--dataVolume [mode='rw']${s3_path}:${VM_path}"
 fi
 if [[ $include_dataVolume == "no" ]]; then
     dataVolumeOption=""
     s3_path=""
     VM_path=""
 fi
-
-# [The rest of your script goes here, including logging in, submitting the job, and extracting the job ID]
-
-
-if [[ ! -z "$entrypoint" ]]; then
-    entrypointOption="--entrypoint '$entrypoint'"
-fi
-
-
 
 # Confirm variables (optional, for debugging or confirmation)
 echo "Using the following configurations:"
@@ -113,21 +94,13 @@ echo "Security Group: $securityGroup"
 echo "Include Data Volume: $include_dataVolume"
 echo
 
-
-set -o errexit -o pipefail
-# Activate environment with entrypoint in job script
-${entrypoint}
-
 # Log in
 echo "Logging in..."
 float login -a "$OP_IP" -u "$user" -p "$password"
 
 # Submit job and extract job ID
 echo "Submitting job..."
-# Modify the float submit command to include these options
-
 jobid=$(echo "yes" | float submit -i "$image" -c "$core" -m "$mem" --publish "$publish" --securityGroup "$securityGroup" $dataVolumeOption | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
-
 echo "Job ID: $jobid"
 
 # Waiting the job initialization and extracting IP
