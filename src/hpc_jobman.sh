@@ -32,7 +32,7 @@ no_fail="|| { command_failed=1; break; }"
 walltime=""
 queue=""
 no_fail="|| { command_failed=1; break; }"
-no_fail_parallel="--halt now,fail=1 || { command_failed=1; }"
+no_fail_parallel="--halt now,fail=1"
 declare -a extra_parameters=()
 
 # Parse command-line arguments
