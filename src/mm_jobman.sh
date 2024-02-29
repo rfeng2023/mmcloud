@@ -282,6 +282,24 @@ check_required_params() {
     done
 }
 
+# Function to check if login address matches submission address
+float_check_status() {
+
+  local output=$(float login --info)
+  local address=$(echo "$output" | grep -o 'address: [0-9.]*' | awk '{print $2}')
+
+  if [ "$address" == "" ];then
+    echo -e "\n[ERROR] No opcenter logged in to. Did you log in?"
+    exit 1
+  fi
+
+  if [ "$opcenter" != "$address" ]; then
+    echo -e "\n[ERROR] The provided opcenter address $opcenter does not match the logged in opcenter $address. Exiting."
+    exit 1
+  fi
+
+}
+
 create_download_commands() {
   local download_cmd=""
 
@@ -608,7 +626,7 @@ EOF
             job_filename=${TMPDIR:-/tmp}/${script_file%.*}/$j.mmjob.sh
         fi
         printf "$job_script" > $job_filename 
-        full_cmd+="float submit -i '$image' -j $job_filename -c $c_min$c_max -m $m_min$m_max $dataVolume_params $volume_params "
+        full_cmd+="float submit -a $opcenter -i '$image' -j $job_filename -c $c_min$c_max -m $m_min$m_max $dataVolume_params $volume_params "
 
         # Added extra parameters if given
         for param in "${extra_parameters[@]}"; do
@@ -628,6 +646,7 @@ EOF
 
 main() {
     check_required_params
+    float_check_status
     if [ "$dryrun" = true ]; then
         echo "#Processing script: $SCRIPT_NAME"
         echo "#c values: $c_min$c_max"
