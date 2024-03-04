@@ -23,7 +23,7 @@ username=aw3600
  --entrypoint "source /usr/local/bin/_activate_current_env.sh" \
  --env ENV_NAME=pecotmr \
  --imageVolSize 10 \
- --opcenter 54.81.85.209 \
+ --opcenter 23.22.157.8 \
  --download "statfungen/ftp_fgc_xqtl/ROSMAP/genotype/analysis_ready/geno_by_chrom/:/home/$username/input/" \
  --download-include "ROSMAP_NIA_WGS.leftnorm.bcftools_qc.plink_qc.1.*" \
  --ebs-mount "/home/$username/input=60" \

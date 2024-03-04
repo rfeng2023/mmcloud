@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Default values for other parameters
-default_OP_IP="54.81.85.209"
+default_OP_IP="23.22.157.8"
 default_s3_path="s3://statfungen/ftp_fgc_xqtl/"
 default_VM_path="/data/"
 default_image="sos2:latest"
@@ -55,7 +55,6 @@ if [[ -z "$password" ]]; then
 fi
 
 
-
 dataVolumeOption=""
 if [[ $include_dataVolume == "yes" ]]; then
     # If no s3_path is provided via the command-line, notify the user that the default will be used
@@ -98,9 +97,18 @@ echo
 echo "Logging in..."
 float login -a "$OP_IP" -u "$user" -p "$password"
 
+# Check if login address matches submission address
+output=$(float login --info)
+address=$(echo "$output" | grep -o 'address: [0-9.]*' | awk '{print $2}')
+
+if [ "$OP_IP" != "$address" ]; then
+    echo -e "\n[ERROR] The provided opcenter address $opcenter does not match the logged in opcenter $address. Exiting."
+    exit 1
+fi
+
 # Submit job and extract job ID
 echo "Submitting job..."
-jobid=$(echo "yes" | float submit -i "$image" -c "$core" -m "$mem" --publish "$publish" --securityGroup "$securityGroup" $dataVolumeOption | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
+jobid=$(echo "yes" | float submit -a "$OP_IP" -i "$image" -c "$core" -m "$mem" --migratePolicy [disable=true] --publish "$publish" --securityGroup "$securityGroup" $dataVolumeOption | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
 echo "Job ID: $jobid"
 
 # Waiting the job initialization and extracting IP
