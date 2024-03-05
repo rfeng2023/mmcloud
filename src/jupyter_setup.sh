@@ -93,10 +93,6 @@ echo "Security Group: $securityGroup"
 echo "Include Data Volume: $include_dataVolume"
 echo
 
-# Log in
-echo "Logging in..."
-float login -a "$OP_IP" -u "$user" -p "$password"
-
 # Check if login address matches submission address
 output=$(float login --info)
 address=$(echo "$output" | grep -o 'address: [0-9.]*' | awk '{print $2}')
@@ -106,9 +102,15 @@ if [ "$OP_IP" != "$address" ]; then
     exit 1
 fi
 
+# Log in
+echo "Logging in..."
+float login -a "$OP_IP" -u "$user" -p "$password"
+
 # Submit job and extract job ID
 echo "Submitting job..."
-jobid=$(echo "yes" | float submit -a "$OP_IP" -i "$image" -c "$core" -m "$mem" --migratePolicy [disable=true] --publish "$publish" --securityGroup "$securityGroup" $dataVolumeOption | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
+float_submit="float submit -a $OP_IP -i $image -c $core -m $mem --migratePolicy [disable=true] --publish $publish --securityGroup $securityGroup $dataVolumeOption --withRoot"
+echo "[Float submit command]: $float_submit"
+jobid=$(echo "yes" | $float_submit | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
 echo "Job ID: $jobid"
 
 # Waiting the job initialization and extracting IP
