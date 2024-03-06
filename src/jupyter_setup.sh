@@ -93,15 +93,6 @@ echo "Security Group: $securityGroup"
 echo "Include Data Volume: $include_dataVolume"
 echo
 
-# Check if login address matches submission address
-output=$(float login --info)
-address=$(echo "$output" | grep -o 'address: [0-9.]*' | awk '{print $2}')
-
-if [ "$OP_IP" != "$address" ]; then
-    echo -e "\n[ERROR] The provided opcenter address $opcenter does not match the logged in opcenter $address. Exiting."
-    exit 1
-fi
-
 # Log in
 echo "Logging in..."
 float login -a "$OP_IP" -u "$user" -p "$password"
