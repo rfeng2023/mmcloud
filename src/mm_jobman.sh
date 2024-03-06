@@ -11,8 +11,6 @@ show_help() {
     echo "  --download <remote>:<local>               Download files/folders from S3. Format: <S3 path>:<local path> (optional)."
     echo "  --upload <local>:<remote>                 Upload folders to S3. Format: <local path>:<S3 path> (optional)."
     echo "  --download-include '<value>'              Use the include flag to include certain files for download (space-separated) (optional)."
-    # echo "  --downloadOpt '<value>'      Options for download, separated by ',' (optional)."
-    # echo "  --uploadOpt '<value>'        Options for upload, separated by ',' (optional)."
     echo "  --dryrun                                  Execute a dry run, printing commands without running them."
     echo "  --entrypoint '<command>'                  Set the initial command to run in the job script (required)."
     echo "  --image <value>                           Specify the Docker image to use for the job (required)."
@@ -21,7 +19,7 @@ show_help() {
     echo "  --mountOpt <value>                        Specify mount options for the bucket (required if --mount is used)."
     echo "  --ebs-mount <folder>=<size>               Mount an EBS volume to a local directory. Format: <local path>=<size>. Size in GB (optional)."
     echo "  --no-fail-fast                            Continue executing subsequent commands even if one fails."
-    echo "  --opcenter <value>                        Provide the Opcenter address for the job (required)."
+    echo "  --opcenter <value>                        Provide the Opcenter address for the job (default: 23.22.157.8)."
     echo "  --parallel-commands <value>               Set the number of commands to run in parallel (default: min number of CPUs)."
     echo "  --min-cores-per-command <value>           Specify the minimum number of CPU cores required per command (optional)."
     echo "  --min-mem-per-command <value>             Specify the minimum amount of memory in GB required per command (optional)."
@@ -44,7 +42,7 @@ image=""
 entrypoint=""
 cwd="~"
 job_size=""
-opcenter=""
+opcenter="23.22.157.8"
 parallel_commands=""
 min_cores_per_command=0
 min_mem_per_command=0
@@ -155,23 +153,6 @@ while (( "$#" )); do
         shift
       done
       ;;
-    # --downloadOpt)
-    #   shift
-    #   while [ $# -gt 0 ] && [[ $1 != -* ]]; do
-    #     IFS=',' read -ra DOWNLOAD <<< "$1"
-    #     echo "${DOWNLOAD[0]}"
-    #     downloadOpt+=("${DOWNLOAD[0]}")
-    #     shift
-    #   done
-    #   ;;
-    # --uploadOpt)
-    #   shift
-    #   while [ $# -gt 0 ] && [[ $1 != -* ]]; do
-    #     IFS=',' read -ra UPLOAD <<< "$1"
-    #     uploadOpt+=("${UPLOAD[0]}")
-    #     shift
-    #   done
-    #   ;;
     --mount|--download|--upload)
       current_flag="$1"
       shift
@@ -237,10 +218,6 @@ check_required_params() {
         missing_params+="--job-size, "
         is_missing=true
     fi
-    if [ -z "$opcenter" ]; then
-        missing_params+="--opcenter, "
-        is_missing=true
-    fi
     if [[ ${#mount_local[@]} -gt 0 && ${#mountOpt[@]} -eq 0 ]]; then
         missing_params+="--mountOpt (required with --mount), "
         is_missing=true
@@ -282,21 +259,15 @@ check_required_params() {
     done
 }
 
-# Function to check if login address matches submission address
-float_check_status() {
+float_login() {
+  user=""
+  password=""
 
-  local output=$(float login --info)
-  local address=$(echo "$output" | grep -o 'address: [0-9.]*' | awk '{print $2}')
+  read -p "Enter user for $opcenter: " user
+  read -sp "Enter password for $opcenter: " password
 
-  if [ "$address" == "" ];then
-    echo -e "\n[ERROR] No opcenter logged in to. Did you log in?"
-    exit 1
-  fi
-
-  if [ "$opcenter" != "$address" ]; then
-    echo -e "\n[ERROR] The provided opcenter address $opcenter does not match the logged in opcenter $address. Exiting."
-    exit 1
-  fi
+  echo -e "\nLogging in to $opcenter"
+  float login -a "$opcenter" -u "$user" -p "$password"
 
 }
 
@@ -325,33 +296,6 @@ create_download_commands() {
       fi
       download_cmd+="\n"
     done
-  # fi
-
-  # # If just one downloadOpt option, use the same one for all download commands
-  # elif [ ${#downloadOpt[@]} -eq 1 ]; then
-  #   for i in "${!download_local[@]}"; do
-  #     # If local folder has a trailing slash, we are copying into a folder, therefore we make the folder
-  #     if [[ ${download_remote[$i]} =~ /$ ]]; then
-  #       download_cmd+="mkdir -p ${download_local[$i]}\n"
-  #     fi
-  #       download_cmd+="aws s3 cp s3://${download_remote[$i]} ${download_local[$i]} $downloadOpt\n"
-  #   done
-
-  # # If more than one downloadOpt option, we expect there to be the same number of download commands
-  # elif [ ${#downloadOpt[@]} -eq  ${#download_local[@]} ]; then
-  #   for i in "${!downloadOpt[@]}"; do
-  #     # If local folder has a trailing slash, we are copying into a folder, therefore we make the folder
-  #     if [[ ${download_remote[$i]} =~ /$ ]]; then
-  #       download_cmd+="mkdir -p ${download_local[$i]}\n"
-  #     fi
-  #     download_cmd+="aws s3 cp s3://${download_remote[$i]} ${download_local[$i]} ${downloadOpt[$i]}\n"
-  #   done
-
-  # # Number of downloadOpts > 1 and dne number of downloads
-  # else
-  #   echo -e "\n[ERROR] If there are multiple download options, please provide the same number of download options and same number of downloads\n"
-  #   exit 1
-  # fi
 
   download_cmd=${download_cmd%\\n}
   echo -e $download_cmd
@@ -373,36 +317,6 @@ create_upload_commands() {
         fi
     done
   fi
-
-  # # If just one uploadOpt option, use the same one for all upload commands
-  # elif [ ${#uploadOpt[@]} -eq 1 ]; then
-  #   for i in "${!upload_local[@]}"; do
-  #     upload_cmd+="mkdir -p ${upload_local[$i]}\n"
-  #     if [[ ${upload_local[$i]} =~ /$ ]]; then
-  #       upload_cmd+="aws s3 sync ${upload_local[$i]} s3://${upload_remote[$i]} $uploadOpt\n"
-  #     else  
-  #       local last_folder=$(basename "${upload_local[$i]}")
-  #       upload_cmd+="aws s3 sync ${upload_local[$i]} s3://${upload_remote[$i]}/$last_folder $uploadOpt\n"
-  #     fi
-  #   done
-
-  # # If more than one uploadOpt option, we expect there to be the same number of upload commands
-  # elif [ ${#uploadOpt[@]} -eq  ${#upload_local[@]} ]; then
-  #   for i in "${!uploadOpt[@]}"; do
-  #     upload_cmd+="mkdir -p ${upload_local[$i]}\n"
-  #     if [[ ${upload_local[$i]} =~ /$ ]]; then
-  #         upload_cmd+="aws s3 sync ${upload_local[$i]} s3://${upload_remote[$i]} ${uploadOpt[$i]}\n"
-  #     else
-  #       local last_folder=$(basename "${upload_local[$i]}")
-  #       upload_cmd+="aws s3 sync ${upload_local[$i]} s3://${upload_remote[$i]}/$last_folder ${uploadOpt[$i]}\n"
-  #     fi
-  #   done
-
-  # # Number of uploadOpts > 1 and dne number of uploads
-  # else
-  #   echo -e "\n[ERROR] If there are multiple upload options, please provide the same number of upload options and same number of uploads\n"
-  #   exit 1
-  # fi
 
   upload_cmd=${upload_cmd%\\n}
   echo -e $upload_cmd
@@ -638,7 +552,8 @@ EOF
         if [ "$dryrun" = true ]; then
             echo -e "${full_cmd}"
         else
-            eval "$full_cmd"
+            jobid=$(eval "$full_cmd" | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
+            echo "Job ID: $jobid"
             rm -rf ${TMPDIR:-/tmp}/${script_file%.*}
         fi
     done 
@@ -646,7 +561,7 @@ EOF
 
 main() {
     check_required_params
-    float_check_status
+    float_login
     if [ "$dryrun" = true ]; then
         echo "#Processing script: $SCRIPT_NAME"
         echo "#c values: $c_min$c_max"

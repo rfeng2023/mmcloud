@@ -47,10 +47,10 @@ done
 
 # Prompt for user and password if not provided via command line
 if [[ -z "$user" ]]; then
-    read -p "Enter user: " user
+    read -p "Enter user for $OP_IP: " user
 fi
 if [[ -z "$password" ]]; then
-    read -sp "Enter password: " password
+    read -sp "Enter password for $OP_IP: " password
     echo ""
 fi
 
@@ -94,7 +94,7 @@ echo "Include Data Volume: $include_dataVolume"
 echo
 
 # Log in
-echo "Logging in..."
+echo "Logging in to $OP_IP"
 float login -a "$OP_IP" -u "$user" -p "$password"
 
 # Submit job and extract job ID
