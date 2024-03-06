@@ -47,10 +47,10 @@ done
 
 # Prompt for user and password if not provided via command line
 if [[ -z "$user" ]]; then
-    read -p "Enter user: " user
+    read -p "Enter user for $OP_IP: " user
 fi
 if [[ -z "$password" ]]; then
-    read -sp "Enter password: " password
+    read -sp "Enter password for $OP_IP: " password
     echo ""
 fi
 
@@ -94,21 +94,14 @@ echo "Include Data Volume: $include_dataVolume"
 echo
 
 # Log in
-echo "Logging in..."
+echo "Logging in to $OP_IP"
 float login -a "$OP_IP" -u "$user" -p "$password"
-
-# Check if login address matches submission address
-output=$(float login --info)
-address=$(echo "$output" | grep -o 'address: [0-9.]*' | awk '{print $2}')
-
-if [ "$OP_IP" != "$address" ]; then
-    echo -e "\n[ERROR] The provided opcenter address $opcenter does not match the logged in opcenter $address. Exiting."
-    exit 1
-fi
 
 # Submit job and extract job ID
 echo "Submitting job..."
-jobid=$(echo "yes" | float submit -a "$OP_IP" -i "$image" -c "$core" -m "$mem" --migratePolicy [disable=true] --publish "$publish" --securityGroup "$securityGroup" $dataVolumeOption | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
+float_submit="float submit -a $OP_IP -i $image -c $core -m $mem --migratePolicy [disable=true] --publish $publish --securityGroup $securityGroup $dataVolumeOption --withRoot"
+echo "[Float submit command]: $float_submit"
+jobid=$(echo "yes" | $float_submit | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
 echo "Job ID: $jobid"
 
 # Waiting the job initialization and extracting IP
