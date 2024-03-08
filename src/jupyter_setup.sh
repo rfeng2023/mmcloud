@@ -99,7 +99,7 @@ float login -a "$OP_IP" -u "$user" -p "$password"
 
 # Submit job and extract job ID
 echo "Submitting job..."
-float_submit="float submit -a $OP_IP -i $image -c $core -m $mem --migratePolicy [disable=true] --publish $publish --securityGroup $securityGroup $dataVolumeOption --withRoot"
+float_submit="float submit -a $OP_IP -i $image -c $core -m $mem --migratePolicy [disable=true] --publish $publish --securityGroup $securityGroup $dataVolumeOption --vmPolicy [onDemand=true] --withRoot"
 echo "[Float submit command]: $float_submit"
 jobid=$(echo "yes" | $float_submit | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
 echo "Job ID: $jobid"
