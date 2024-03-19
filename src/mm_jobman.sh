@@ -259,15 +259,21 @@ check_required_params() {
     done
 }
 
-float_login() {
-  user=""
-  password=""
+float_check_status() {
+  
+  local output=$(float login --info)
+  local address=$(echo "$output" | grep -o 'address: [0-9.]*' | awk '{print $2}')
 
-  read -p "Enter user for $opcenter: " user
-  read -sp "Enter password for $opcenter: " password
+  if [ "$address" == "" ];then
+    echo -e "\n[ERROR] No opcenter logged in to. Did you log in?"
+    exit 1
+  fi
 
-  echo -e "\nLogging in to $opcenter"
-  float login -a "$opcenter" -u "$user" -p "$password"
+  if [ "$opcenter" != "$address" ]; then
+    echo -e "\n[ERROR] The provided opcenter address $opcenter does not match the logged in opcenter $address. Exiting."
+    exit 1
+  fi
+
 
 }
 
@@ -561,7 +567,7 @@ EOF
 
 main() {
     check_required_params
-    float_login
+    float_check_status
     if [ "$dryrun" = true ]; then
         echo "#Processing script: $SCRIPT_NAME"
         echo "#c values: $c_min$c_max"
