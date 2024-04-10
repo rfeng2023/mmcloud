@@ -10,6 +10,7 @@ default_mem=16
 default_publish="8888:8888"
 default_securityGroup="sg-038d1e15159af04a1"
 default_include_dataVolume="yes"
+default_vm_policy="ondemand"
 
 # Initialize variables to empty for user and password
 user=""
@@ -25,6 +26,7 @@ mem="$default_mem"
 publish="$default_publish"
 securityGroup="$default_securityGroup"
 include_dataVolume="$default_include_dataVolume"
+vm_policy="$default_vm_policy"
 
 # Parse command line options
 while [[ "$#" -gt 0 ]]; do
@@ -40,6 +42,7 @@ while [[ "$#" -gt 0 ]]; do
         -pub|--publish) publish="$2"; shift ;;
         -sg|--securityGroup) securityGroup="$2"; shift ;;
         -dv|--dataVolume) include_dataVolume="$2"; shift ;;
+        -vm|--vmPolicy) $vm_policy="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
@@ -78,6 +81,16 @@ if [[ $include_dataVolume == "no" ]]; then
     VM_path=""
 fi
 
+# Determine VM Policy
+if [ $vm_policy == "spot" ]; then
+    vm_policy_command="[spotOnly=true]"
+elif [ $vm_policy == "ondemand" ]; then
+    vm_policy_command="[onDemand=true]"
+else
+    echo "Invalid VM Policy setting '$vm_policy'. Please use 'spot' or 'ondemand'"
+    return 1
+fi
+
 # Confirm variables (optional, for debugging or confirmation)
 echo "Using the following configurations:"
 echo "OP_IP: $OP_IP"
@@ -91,6 +104,7 @@ echo "Memory: $mem GB"
 echo "Publish: $publish"
 echo "Security Group: $securityGroup"
 echo "Include Data Volume: $include_dataVolume"
+echo "VM Policy: $vm_policy"
 echo
 
 # Log in
@@ -99,7 +113,7 @@ float login -a "$OP_IP" -u "$user" -p "$password"
 
 # Submit job and extract job ID
 echo "Submitting job..."
-float_submit="float submit -a $OP_IP -i $image -c $core -m $mem --migratePolicy [disable=true] --publish $publish --securityGroup $securityGroup $dataVolumeOption --vmPolicy [onDemand=true] --withRoot"
+float_submit="float submit -a $OP_IP -i $image -c $core -m $mem --vmPolicy $vm_policy_command --migratePolicy [disable=true] --publish $publish --securityGroup $securityGroup $dataVolumeOption --vmPolicy [onDemand=true] --withRoot"
 echo "[Float submit command]: $float_submit"
 jobid=$(echo "yes" | $float_submit | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
 echo "Job ID: $jobid"

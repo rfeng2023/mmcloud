@@ -14,6 +14,7 @@ show_help() {
     echo "  --dryrun                                  Execute a dry run, printing commands without running them."
     echo "  --entrypoint '<command>'                  Set the initial command to run in the job script (required)."
     echo "  --image <value>                           Specify the Docker image to use for the job (required)."
+    echo "  --vm-policy <spot | ondemand>              Specify On-demand or Spot instance (default: spot)".
     echo "  --job-size <value>                        Set the number of commands per job for creating virtual machines (required)."
     echo "  --mount <bucket>:<local>                  Mount an S3 bucket to a local directory. Format: <bucket>:<local path> (optional)."
     echo "  --mountOpt <value>                        Specify mount options for the bucket (required if --mount is used)."
@@ -37,6 +38,7 @@ c_min=""
 c_max=""
 m_min=""
 m_max=""
+vm_policy="spot"
 declare -a mountOpt=()
 image=""
 entrypoint=""
@@ -105,6 +107,10 @@ while (( "$#" )); do
       ;;
     --job-size)
       job_size="$2"
+      shift 2
+      ;;
+    --vm-policy)
+      vm_policy="$2"
       shift 2
       ;;
     --cwd)
@@ -468,6 +474,17 @@ submit_each_line_with_mmfloat() {
 
     # Divide the commands into jobs based on job-size
     num_jobs=$(( ($total_commands + $job_size - 1) / $job_size )) # Ceiling division
+
+    # Determine VM Policy
+    if [ $vm_policy == "spot" ]; then
+      vm_policy_command="[spotOnly=true]"
+    elif [ $vm_policy == "ondemand" ]; then
+      vm_policy_command="[onDemand=true]"
+    else
+      echo "Invalid VM Policy setting '$vm_policy'. Please use 'spot' or 'ondemand'"
+      return 1
+    fi
+
     # Loop to create job submission commands
     for (( j = 0; j < $num_jobs; j++ )); do
         full_cmd=""
@@ -546,7 +563,7 @@ EOF
             job_filename=${TMPDIR:-/tmp}/${script_file%.*}/$j.mmjob.sh
         fi
         printf "$job_script" > $job_filename 
-        full_cmd+="float submit -a $opcenter -i '$image' -j $job_filename -c $c_min$c_max -m $m_min$m_max $dataVolume_params $volume_params "
+        full_cmd+="float submit -a $opcenter -i '$image' -j $job_filename -c $c_min$c_max -m $m_min$m_max --vmPolicy $vm_policy_command $dataVolume_params $volume_params "
 
         # Added extra parameters if given
         for param in "${extra_parameters[@]}"; do
