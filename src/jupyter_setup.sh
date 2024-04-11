@@ -10,7 +10,7 @@ default_mem=16
 default_publish="8888:8888"
 default_securityGroup="sg-038d1e15159af04a1"
 default_include_dataVolume="yes"
-default_vm_policy="ondemand"
+default_vm_policy="onDemand"
 
 # Initialize variables to empty for user and password
 user=""
@@ -82,12 +82,15 @@ if [[ $include_dataVolume == "no" ]]; then
 fi
 
 # Determine VM Policy
-if [ $vm_policy == "spot" ]; then
+local lowercase_vm_policy=$(echo "$vm_policy" | tr '[:upper:]' '[:lower:]')
+if [ $lowercase_vm_policy == "spotonly" ]; then
     vm_policy_command="[spotOnly=true]"
-elif [ $vm_policy == "ondemand" ]; then
+elif [ $lowercase_vm_policy == "ondemand" ]; then
     vm_policy_command="[onDemand=true]"
+elif [ $lowercase_vm_policy == "spotfirst" ]; then
+    vm_policy_command="[spotFirst=true]"
 else
-    echo "Invalid VM Policy setting '$vm_policy'. Please use 'spot' or 'ondemand'"
+    echo "Invalid VM Policy setting '$vm_policy'. Please use 'spotOnly', 'onDemand', or 'spotFirst'"
     return 1
 fi
 
