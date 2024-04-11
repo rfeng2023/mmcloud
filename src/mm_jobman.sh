@@ -14,7 +14,7 @@ show_help() {
     echo "  --dryrun                                  Execute a dry run, printing commands without running them."
     echo "  --entrypoint '<command>'                  Set the initial command to run in the job script (required)."
     echo "  --image <value>                           Specify the Docker image to use for the job (required)."
-    echo "  --vm-policy <spot | ondemand>              Specify On-demand or Spot instance (default: spot)".
+    echo "  --vm-policy <spotOnly|onDemand|spotFirst> Specify On-demand or Spot instance (default: spotOnly)".
     echo "  --job-size <value>                        Set the number of commands per job for creating virtual machines (required)."
     echo "  --mount <bucket>:<local>                  Mount an S3 bucket to a local directory. Format: <bucket>:<local path> (optional)."
     echo "  --mountOpt <value>                        Specify mount options for the bucket (required if --mount is used)."
@@ -38,7 +38,7 @@ c_min=""
 c_max=""
 m_min=""
 m_max=""
-vm_policy="spot"
+vm_policy="spotOnly"
 declare -a mountOpt=()
 image=""
 entrypoint=""
@@ -476,12 +476,15 @@ submit_each_line_with_mmfloat() {
     num_jobs=$(( ($total_commands + $job_size - 1) / $job_size )) # Ceiling division
 
     # Determine VM Policy
-    if [ $vm_policy == "spot" ]; then
+    local lowercase_vm_policy=$(echo "$vm_policy" | tr '[:upper:]' '[:lower:]')
+    if [ $lowercase_vm_policy == "spotonly" ]; then
       vm_policy_command="[spotOnly=true]"
-    elif [ $vm_policy == "ondemand" ]; then
+    elif [ $lowercase_vm_policy == "ondemand" ]; then
       vm_policy_command="[onDemand=true]"
+    elif [ $lowercase_vm_policy == "spotfirst" ]; then
+      vm_policy_command="[spotFirst=true]"
     else
-      echo "Invalid VM Policy setting '$vm_policy'. Please use 'spot' or 'ondemand'"
+      echo "Invalid VM Policy setting '$vm_policy'. Please use 'spotOnly', 'onDemand', or 'spotFirst'"
       return 1
     fi
 
