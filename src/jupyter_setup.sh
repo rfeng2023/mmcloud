@@ -82,7 +82,7 @@ if [[ $include_dataVolume == "no" ]]; then
 fi
 
 # Determine VM Policy
-local lowercase_vm_policy=$(echo "$vm_policy" | tr '[:upper:]' '[:lower:]')
+lowercase_vm_policy=$(echo "$vm_policy" | tr '[:upper:]' '[:lower:]')
 if [ $lowercase_vm_policy == "spotonly" ]; then
     vm_policy_command="[spotOnly=true]"
 elif [ $lowercase_vm_policy == "ondemand" ]; then
@@ -124,10 +124,10 @@ echo "Job ID: $jobid"
 # Waiting the job initialization and extracting IP
 echo "Waiting for the job to initialize and retrieve the public IP (~3min)..."
 while true; do
-    IP=$(float show -j "$jobid" | grep public | cut -d ':' -f2 | sed 's/ //g')
-
-    if [[ -n "$IP" ]]; then
-        echo "Public IP: $IP"
+    IP_ADDRESS=$(float show -j "$jobid" | grep public | cut -d ':' -f2 | sed 's/ //g')
+    echo "IP ADDRESS: $IP_ADDRESS"
+    if [[ $IP_ADDRESS == *.* ]]; then
+        echo "Public IP: $IP_ADDRESS"
         break # break it when got IP
     else
         echo "Still waiting for the job to initialize..."
@@ -139,8 +139,7 @@ done
 echo "Waiting for the job to execute and retrieve token(~7min)..."
 while true; do
     url=$(float log -j "$jobid" cat stderr.autosave | grep token | head -n1)
-
-    if [[ -n "$url" ]]; then
+    if [[ $url == *token* ]]; then
         #echo "Original URL: $url"
         break # break it when got IP
     else
@@ -150,7 +149,7 @@ while true; do
 done
 
 # Modify and output URL
-new_url=$(echo "$url" | sed -E "s/.*http:\/\/[^:]+(:8888\/lab\?token=[a-zA-Z0-9]+)/http:\/\/$IP\1/")
+new_url=$(echo "$url" | sed -E "s/.*http:\/\/[^:]+(:8888\/lab\?token=[a-zA-Z0-9]+)/http:\/\/$IP_ADDRESS\1/")
 echo "To access the server, copy this URL in a browser: $new_url"
 echo "To access the server, copy this URL in a browser: $new_url" > "${jobid}.log"
 
