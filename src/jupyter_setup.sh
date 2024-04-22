@@ -73,7 +73,7 @@ if [[ $include_dataVolume == "yes" ]]; then
     fi
 
     # Construct the dataVolumeOption with either the specified or default values
-    dataVolumeOption="--dataVolume [mode='rw']${s3_path}:${VM_path}"
+    dataVolumeOption="--dataVolume [mode=rw]${s3_path}:${VM_path}"
 fi
 if [[ $include_dataVolume == "no" ]]; then
     dataVolumeOption=""
