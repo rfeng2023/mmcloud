@@ -116,7 +116,8 @@ float login -a "$OP_IP" -u "$user" -p "$password"
 
 # Submit job and extract job ID
 echo "Submitting job..."
-float_submit="float submit -a $OP_IP -i $image -c $core -m $mem --vmPolicy $vm_policy_command --migratePolicy [disable=true] --publish $publish --securityGroup $securityGroup $dataVolumeOption --vmPolicy [onDemand=true] --withRoot"
+# Will use default gateway g-1xpuesgrea6xclgj46sbf (should be the only gateway)
+float_submit="float submit -a $OP_IP -i $image -c $core -m $mem --vmPolicy $vm_policy_command --gateway auto --migratePolicy [disable=true] --publish $publish --securityGroup $securityGroup $dataVolumeOption --vmPolicy [onDemand=true] --withRoot"
 echo "[Float submit command]: $float_submit"
 jobid=$(echo "yes" | $float_submit | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
 echo "Job ID: $jobid"
@@ -125,7 +126,6 @@ echo "Job ID: $jobid"
 echo "Waiting for the job to initialize and retrieve the public IP (~3min)..."
 while true; do
     IP_ADDRESS=$(float show -j "$jobid" | grep public | cut -d ':' -f2 | sed 's/ //g')
-    echo "IP ADDRESS: $IP_ADDRESS"
     if [[ $IP_ADDRESS == *.* ]]; then
         echo "Public IP: $IP_ADDRESS"
         break # break it when got IP
