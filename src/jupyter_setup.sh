@@ -11,6 +11,7 @@ default_publish="8888:8888"
 default_securityGroup="sg-038d1e15159af04a1"
 default_include_dataVolume="yes"
 default_vm_policy="onDemand"
+default_image_vol_size=6
 
 # Initialize variables to empty for user and password
 user=""
@@ -27,6 +28,7 @@ publish="$default_publish"
 securityGroup="$default_securityGroup"
 include_dataVolume="$default_include_dataVolume"
 vm_policy="$default_vm_policy"
+image_vol_size="$default_image_vol_size"
 
 # Parse command line options
 while [[ "$#" -gt 0 ]]; do
@@ -42,7 +44,8 @@ while [[ "$#" -gt 0 ]]; do
         -pub|--publish) publish="$2"; shift ;;
         -sg|--securityGroup) securityGroup="$2"; shift ;;
         -dv|--dataVolume) include_dataVolume="$2"; shift ;;
-        -vm|--vmPolicy) $vm_policy="$2"; shift ;;
+        -vm|--vmPolicy) vm_policy="$2"; shift ;;
+        -ivs|--imageVolSize) image_vol_size="$2"; shift;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
@@ -117,7 +120,7 @@ float login -a "$OP_IP" -u "$user" -p "$password"
 # Submit job and extract job ID
 echo "Submitting job..."
 # Will use default gateway g-1xpuesgrea6xclgj46sbf (should be the only gateway)
-float_submit="float submit -a $OP_IP -i $image -c $core -m $mem --vmPolicy $vm_policy_command --gateway g-1xpuesgrea6xclgj46sbf --migratePolicy [disable=true] --publish $publish --securityGroup $securityGroup $dataVolumeOption --vmPolicy [onDemand=true] --withRoot"
+float_submit="float submit -a $OP_IP -i $image -c $core -m $mem --vmPolicy $vm_policy_command --imageVolSize $image_vol_size --gateway g-1xpuesgrea6xclgj46sbf --migratePolicy [disable=true] --publish $publish --securityGroup $securityGroup $dataVolumeOption --vmPolicy [onDemand=true] --withRoot"
 echo "[Float submit command]: $float_submit"
 jobid=$(echo "yes" | $float_submit | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
 echo "Job ID: $jobid"
