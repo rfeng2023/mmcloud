@@ -11,7 +11,7 @@ default_publish="8888:8888"
 default_securityGroup="sg-038d1e15159af04a1"
 default_include_dataVolume="yes"
 default_vm_policy="onDemand"
-default_image_vol_size=6
+default_image_vol_size=17
 
 # Initialize variables to empty for user and password
 user=""
