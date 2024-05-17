@@ -121,6 +121,12 @@ float login -a "$OP_IP" -u "$user" -p "$password"
 echo "Submitting job..."
 # Will use default gateway g-1xpuesgrea6xclgj46sbf (should be the only gateway)
 float_submit="float submit -a $OP_IP -i $image -c $core -m $mem --vmPolicy $vm_policy_command --imageVolSize $image_vol_size --gateway g-1xpuesgrea6xclgj46sbf --migratePolicy [disable=true] --publish $publish --securityGroup $securityGroup $dataVolumeOption --vmPolicy [onDemand=true] --withRoot"
+# If user is admin, grant them sudo access
+admin_role=$(float login --info | grep "role: admin")
+if [ ! -z "$admin_role" ]; then
+    float_submit+=" -e GRANT_SUDO=yes"
+fi
+
 echo "[Float submit command]: $float_submit"
 jobid=$(echo "yes" | $float_submit | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
 echo "Job ID: $jobid"
