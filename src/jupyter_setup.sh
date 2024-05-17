@@ -128,7 +128,7 @@ echo "Job ID: $jobid"
 # Waiting the job initialization and extracting IP
 echo "Waiting for the job to initialize and retrieve the public IP (~3min)..."
 while true; do
-    IP_ADDRESS=$(float show -j "$jobid" | grep public | cut -d ':' -f2 | sed 's/ //g')
+    IP_ADDRESS=$(float show -j "$jobid" | grep -A 1 portMappings | tail -n 1 | awk '{print $4}')
     if [[ $IP_ADDRESS == *.* ]]; then
         echo "Public IP: $IP_ADDRESS"
         break # break it when got IP
@@ -139,12 +139,11 @@ while true; do
 done
 
 # Waiting the executing and get autosave log 
-echo "Waiting for the job to execute and retrieve token(~7min)..."
+echo "Waiting for the job to execute and retrieve token (~7min)..."
 while true; do
-    url=$(float log -j "$jobid" cat stderr.autosave | grep token | head -n1)
+    url=$(float log -j "$jobid" cat stderr.autosave | grep token | head -n 1)
     if [[ $url == *token* ]]; then
-        #echo "Original URL: $url"
-        break # break it when got IP
+        break # break it when got token
     else
         echo "Still waiting for the job to execute..."
         sleep 60 # check it every 60 secs
@@ -152,7 +151,8 @@ while true; do
 done
 
 # Modify and output URL
-new_url=$(echo "$url" | sed -E "s/.*http:\/\/[^:]+(:8888\/lab\?token=[a-zA-Z0-9]+)/http:\/\/$IP_ADDRESS\1/")
+token=$(echo "$url" | sed -E 's|.*http://[^/]+/(lab\?token=[a-zA-Z0-9]+).*|\1|')
+new_url="http://$IP_ADDRESS/$token"
 echo "To access the server, copy this URL in a browser: $new_url"
 echo "To access the server, copy this URL in a browser: $new_url" > "${jobid}.log"
 
