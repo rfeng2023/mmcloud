@@ -60,7 +60,7 @@ Example output:
  => CACHED [1/6] FROM ghcr.io/prefix-dev/pixi:latest@sha256:6527d29c3c8c241021bd9ea787069e899d45ab495ce89cdbeabf1b0ab31a0f04                             0.0s
  => [internal] load build context                                                                                                                        0.0s
  => => transferring context: 337B                                                                                                                        0.0s
- => [2/6] RUN apt-get update && apt-get -y install ca-certificates tzdata libgl1 libgomp1 less ttyd                                                     44.9s
+ => [2/6] RUN apt-get update && apt-get -y install ca-certificates tzdata libgl1 libgomp1 less tmate                                                    44.9s
  => [3/6] RUN ln -sf /bin/bash /bin/sh                                                                                                                   0.3s 
  => [4/6] RUN useradd --no-log-init --create-home --shell /bin/bash --uid 1000 --no-user-group jovyan                                                    0.5s 
  => [5/6] COPY --chown=jovyan --chmod=755 entrypoint.sh /home/jovyan/entrypoint.sh                                                                       0.0s 
@@ -81,14 +81,21 @@ pixi-jovyan                   latest    f30c3fd0e1b4   57 seconds ago       384M
 ## Verify the docker images locally (optional)
 You could use `docker run` to validate the image locally.
 ```
-docker run --platform linux/amd64 -d -p 8888:8888 pixi-jovyan
+docker run -it --platform linux/amd64 pixi-jovyan
 ```
-Then in your browser, type 
+
+Then you will see these in your terminal,
 
 ```
-http://localhost:8080/
+To connect to the session locally, run: tmate -S /tmp/tmate-1000/m2tJUM attach
+Connecting to ssh.tmate.io...
+web session read only: https://tmate.io/t/ro-JZ6aj6ddRu3n7sGYkwfPvZWs8
+ssh session read only: ssh ro-JZ6aj6ddRu3n7sGYkwfPvZWs8@nyc1.tmate.io
+web session: https://tmate.io/t/FqrdyjWdJv8ScPGeLYhJacYwt
+ssh session: ssh FqrdyjWdJv8ScPGeLYhJacYwt@nyc1.tmate.io
 ```
-to see it work. 
+
+You can use the `ssh session` to connect to it, by typing the last line of the text above in your terminal. That will take you to an interactive session through your local terminal emulator.
 
 ## Push to the dockerhub
 

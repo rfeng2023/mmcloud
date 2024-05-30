@@ -4,7 +4,7 @@
 default_OP_IP="23.22.157.8"
 default_s3_path="s3://statfungen/ftp_fgc_xqtl/"
 default_VM_path="/data/"
-default_image="sos2:latest"
+default_image="gaow/pixi-jovyan:latest"
 default_core=4
 default_mem=16
 default_publish="8888:8888"
@@ -165,4 +165,3 @@ echo "To access the server, copy this URL in a browser: $new_url" > "${jobid}.lo
 suspend_command="float suspend -j $jobid"
 echo "Suspend your Jupyter Notebook when you do not need it by running:"
 echo "$suspend_command"
-
