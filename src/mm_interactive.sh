@@ -35,6 +35,7 @@ image_vol_size="$default_image_vol_size"
 interactive_s3_path=""
 interactive_VM_path="$default_interactive_VM_path"
 ide="$default_ide"
+additional_mounts=()
 
 # Parse command line options
 while [[ "$#" -gt 0 ]]; do
@@ -53,6 +54,9 @@ while [[ "$#" -gt 0 ]]; do
         -vm|--vmPolicy) vm_policy="$2"; shift ;;
         -ivs|--imageVolSize) image_vol_size="$2"; shift ;;
         -ide|--interactive_develop_env) ide="$2"; shift ;;
+        -is3|--interactive_s3_path) interactive_s3_path="$2"; shift ;;
+        -ivm|--interactive_VM_path) interactive_VM_path="$2"; shift ;;
+        -am|--additional_mounts) additional_mounts+=("$2"); shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
@@ -67,15 +71,17 @@ if [[ -z "$password" ]]; then
     echo ""
 fi
 
-# Set interactive_s3_path based on user
-if [[ "$user" == "admin" ]]; then
-    interactive_s3_path="${default_interactive_s3_path_base}rf2872/"
-else
-    interactive_s3_path="${default_interactive_s3_path_base}${user}/"
+# Set interactive_s3_path based on user if not provided
+if [[ -z "$interactive_s3_path" ]]; then
+    if [[ "$user" == "admin" ]]; then
+        interactive_s3_path="${default_interactive_s3_path_base}rf2872/"
+    else
+        interactive_s3_path="${default_interactive_s3_path_base}${user}/"
+    fi
 fi
 
 # Check and create S3 path if it doesn't exist
-aws s3api head-object --bucket statfungen --key "ftp_fgc_xqtl/interactive_sessions/${user}/" || aws s3api put-object --bucket statfungen --key "ftp_fgc_xqtl/interactive_sessions/${user}/"
+aws s3api head-object --bucket statfungen --key "${interactive_s3_path#s3://}" || aws s3api put-object --bucket statfungen --key "${interactive_s3_path#s3://}"
 
 dataVolumeOption=""
 if [[ $include_dataVolume == "yes" ]]; then
@@ -93,6 +99,11 @@ if [[ $include_dataVolume == "yes" ]]; then
 
     # Construct the dataVolumeOption with either the specified or default values
     dataVolumeOption="--dataVolume [mode=rw]${s3_path}:${VM_path} --dataVolume [mode=rw]${interactive_s3_path}:${interactive_VM_path}"
+
+    # Add additional mount paths if provided
+    for mount in "${additional_mounts[@]}"; do
+        dataVolumeOption+=" --dataVolume [mode=rw]${mount}"
+    done
 fi
 if [[ $include_dataVolume == "no" ]]; then
     dataVolumeOption=""
@@ -100,6 +111,7 @@ if [[ $include_dataVolume == "no" ]]; then
     VM_path=""
     interactive_s3_path=""
     interactive_VM_path=""
+    additional_mounts=()
 fi
 
 # Determine VM Policy
@@ -132,6 +144,7 @@ echo "VM Policy: $vm_policy"
 echo "Interactive S3 Path: $interactive_s3_path"
 echo "Interactive VM Path: $interactive_VM_path"
 echo "IDE: $ide"
+echo "Additional Mounts: ${additional_mounts[@]}"
 echo
 
 # Log in
@@ -144,7 +157,7 @@ echo "Submitting job..."
 float_submit="float submit -a $OP_IP -i $image -c $core -m $mem --vmPolicy $vm_policy_command --imageVolSize $image_vol_size --gateway g-1xpuesgrea6xclgj46sbf --migratePolicy [disable=true] --publish $publish --securityGroup $securityGroup $dataVolumeOption --vmPolicy [onDemand=true] --withRoot"
 # If user is admin, grant them sudo access
 admin_role=$(float login --info | grep "role: admin")
-if [ ! -z "$admin_role" ];then
+if [ ! -z "$admin_role" ]; then
     float_submit+=" -e GRANT_SUDO=yes"
 fi
 
@@ -183,7 +196,6 @@ if [[ "$ide" == "jupyter" ]]; then
     new_url="http://$IP_ADDRESS/$token"
     echo "To access the server, copy this URL in a browser: $new_url"
     echo "To access the server, copy this URL in a browser: $new_url" > "${jobid}_jupyter.log"
-
 else
     # Waiting for the job initialization and extracting SSH session
     echo "Waiting for the job to initialize and retrieve SSH session (~3min)..."
