@@ -74,6 +74,9 @@ else
     interactive_s3_path="${default_interactive_s3_path_base}${user}/"
 fi
 
+# Check and create S3 path if it doesn't exist
+aws s3api head-object --bucket statfungen --key "ftp_fgc_xqtl/interactive_sessions/${user}/" || aws s3api put-object --bucket statfungen --key "ftp_fgc_xqtl/interactive_sessions/${user}/"
+
 dataVolumeOption=""
 if [[ $include_dataVolume == "yes" ]]; then
     # If no s3_path is provided via the command-line, notify the user that the default will be used
@@ -141,7 +144,7 @@ echo "Submitting job..."
 float_submit="float submit -a $OP_IP -i $image -c $core -m $mem --vmPolicy $vm_policy_command --imageVolSize $image_vol_size --gateway g-1xpuesgrea6xclgj46sbf --migratePolicy [disable=true] --publish $publish --securityGroup $securityGroup $dataVolumeOption --vmPolicy [onDemand=true] --withRoot"
 # If user is admin, grant them sudo access
 admin_role=$(float login --info | grep "role: admin")
-if [ ! -z "$admin_role" ]; then
+if [ ! -z "$admin_role" ];then
     float_submit+=" -e GRANT_SUDO=yes"
 fi
 
@@ -181,9 +184,6 @@ if [[ "$ide" == "jupyter" ]]; then
     echo "To access the server, copy this URL in a browser: $new_url"
     echo "To access the server, copy this URL in a browser: $new_url" > "${jobid}_jupyter.log"
 
-    suspend_command="float suspend -j $jobid"
-    echo "Suspend your Jupyter Notebook when you do not need it by running:"
-    echo "$suspend_command"
 else
     # Waiting for the job initialization and extracting SSH session
     echo "Waiting for the job to initialize and retrieve SSH session (~3min)..."
@@ -200,4 +200,10 @@ else
 
     echo "SSH session: $ssh_session" > "${jobid}_${ide}.log"
 fi
+
+# Output suspend command for all IDEs
+suspend_command="float suspend -j $jobid"
+echo "Suspend your environment when you do not need it by running:"
+echo "$suspend_command"
+echo "$suspend_command" >> "${jobid}_${ide}.log"
 
