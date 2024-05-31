@@ -4,7 +4,7 @@
 default_OP_IP="23.22.157.8"
 default_s3_path="s3://statfungen/ftp_fgc_xqtl/"
 default_VM_path="/data/"
-default_image="gaow/pixi-jovyan:latest"
+default_image="pixi-ru:latest"
 default_core=4
 default_mem=16
 default_publish="8888:8888"
@@ -12,6 +12,9 @@ default_securityGroup="sg-038d1e15159af04a1"
 default_include_dataVolume="yes"
 default_vm_policy="onDemand"
 default_image_vol_size=17
+default_interactive_s3_path_base="s3://statfungen/ftp_fgc_xqtl/interactive_sessions/"
+default_interactive_VM_path="/home/jovyan/"
+default_ide="nvim"
 
 # Initialize variables to empty for user and password
 user=""
@@ -29,6 +32,9 @@ securityGroup="$default_securityGroup"
 include_dataVolume="$default_include_dataVolume"
 vm_policy="$default_vm_policy"
 image_vol_size="$default_image_vol_size"
+interactive_s3_path=""
+interactive_VM_path="$default_interactive_VM_path"
+ide="$default_ide"
 
 # Parse command line options
 while [[ "$#" -gt 0 ]]; do
@@ -45,7 +51,8 @@ while [[ "$#" -gt 0 ]]; do
         -sg|--securityGroup) securityGroup="$2"; shift ;;
         -dv|--dataVolume) include_dataVolume="$2"; shift ;;
         -vm|--vmPolicy) vm_policy="$2"; shift ;;
-        -ivs|--imageVolSize) image_vol_size="$2"; shift;;
+        -ivs|--imageVolSize) image_vol_size="$2"; shift ;;
+        -ide|--interactive_develop_env) ide="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
@@ -60,6 +67,12 @@ if [[ -z "$password" ]]; then
     echo ""
 fi
 
+# Set interactive_s3_path based on user
+if [[ "$user" == "admin" ]]; then
+    interactive_s3_path="${default_interactive_s3_path_base}rf2872/"
+else
+    interactive_s3_path="${default_interactive_s3_path_base}${user}/"
+fi
 
 dataVolumeOption=""
 if [[ $include_dataVolume == "yes" ]]; then
@@ -76,12 +89,14 @@ if [[ $include_dataVolume == "yes" ]]; then
     fi
 
     # Construct the dataVolumeOption with either the specified or default values
-    dataVolumeOption="--dataVolume [mode=rw]${s3_path}:${VM_path}"
+    dataVolumeOption="--dataVolume [mode=rw]${s3_path}:${VM_path} --dataVolume [mode=rw]${interactive_s3_path}:${interactive_VM_path}"
 fi
 if [[ $include_dataVolume == "no" ]]; then
     dataVolumeOption=""
     s3_path=""
     VM_path=""
+    interactive_s3_path=""
+    interactive_VM_path=""
 fi
 
 # Determine VM Policy
@@ -111,6 +126,9 @@ echo "Publish: $publish"
 echo "Security Group: $securityGroup"
 echo "Include Data Volume: $include_dataVolume"
 echo "VM Policy: $vm_policy"
+echo "Interactive S3 Path: $interactive_s3_path"
+echo "Interactive VM Path: $interactive_VM_path"
+echo "IDE: $ide"
 echo
 
 # Log in
@@ -131,37 +149,55 @@ echo "[Float submit command]: $float_submit"
 jobid=$(echo "yes" | $float_submit | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
 echo "Job ID: $jobid"
 
-# Waiting the job initialization and extracting IP
-echo "Waiting for the job to initialize and retrieve the public IP (~3min)..."
-while true; do
-    IP_ADDRESS=$(float show -j "$jobid" | grep -A 1 portMappings | tail -n 1 | awk '{print $4}')
-    if [[ $IP_ADDRESS == *.* ]]; then
-        echo "Public IP: $IP_ADDRESS"
-        break # break it when got IP
-    else
-        echo "Still waiting for the job to initialize..."
-        sleep 60 # check it every 60 secs
-    fi
-done
+if [[ "$ide" == "jupyter" ]]; then
+    # Waiting for the job initialization and extracting IP
+    echo "Waiting for the job to initialize and retrieve the public IP (~3min)..."
+    while true; do
+        IP_ADDRESS=$(float show -j "$jobid" | grep -A 1 portMappings | tail -n 1 | awk '{print $4}')
+        if [[ $IP_ADDRESS == *.* ]]; then
+            echo "Public IP: $IP_ADDRESS"
+            break # break it when got IP
+        else
+            echo "Still waiting for the job to initialize..."
+            sleep 60 # check it every 60 secs
+        fi
+    done
 
-# Waiting the executing and get autosave log 
-echo "Waiting for the job to execute and retrieve token (~7min)..."
-while true; do
-    url=$(float log -j "$jobid" cat stderr.autosave | grep token | head -n 1)
-    if [[ $url == *token* ]]; then
-        break # break it when got token
-    else
-        echo "Still waiting for the job to execute..."
-        sleep 60 # check it every 60 secs
-    fi
-done
+    # Waiting for the job to execute and get autosave log 
+    echo "Waiting for the job to execute and retrieve token (~7min)..."
+    while true; do
+        url=$(float log -j "$jobid" cat stderr.autosave | grep token | head -n 1)
+        if [[ $url == *token* ]]; then
+            break # break it when got token
+        else
+            echo "Still waiting for the job to execute..."
+            sleep 60 # check it every 60 secs
+        fi
+    done
 
-# Modify and output URL
-token=$(echo "$url" | sed -E 's|.*http://[^/]+/(lab\?token=[a-zA-Z0-9]+).*|\1|')
-new_url="http://$IP_ADDRESS/$token"
-echo "To access the server, copy this URL in a browser: $new_url"
-echo "To access the server, copy this URL in a browser: $new_url" > "${jobid}.log"
+    # Modify and output URL
+    token=$(echo "$url" | sed -E 's|.*http://[^/]+/(lab\?token=[a-zA-Z0-9]+).*|\1|')
+    new_url="http://$IP_ADDRESS/$token"
+    echo "To access the server, copy this URL in a browser: $new_url"
+    echo "To access the server, copy this URL in a browser: $new_url" > "${jobid}_jupyter.log"
 
-suspend_command="float suspend -j $jobid"
-echo "Suspend your Jupyter Notebook when you do not need it by running:"
-echo "$suspend_command"
+    suspend_command="float suspend -j $jobid"
+    echo "Suspend your Jupyter Notebook when you do not need it by running:"
+    echo "$suspend_command"
+else
+    # Waiting for the job initialization and extracting SSH session
+    echo "Waiting for the job to initialize and retrieve SSH session (~3min)..."
+    while true; do
+        ssh_session=$(float show -j "$jobid" | grep 'ssh session' | awk -F'ssh session: ' '{print $2}')
+        if [[ -n "$ssh_session" ]]; then
+            echo "SSH session: $ssh_session"
+            break # break it when got SSH session
+        else
+            echo "Still waiting for the job to initialize..."
+            sleep 60 # check it every 60 secs
+        fi
+    done
+
+    echo "SSH session: $ssh_session" > "${jobid}_${ide}.log"
+fi
+
