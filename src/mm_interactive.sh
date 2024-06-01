@@ -11,7 +11,7 @@ default_publish="8888:8888"
 default_securityGroup="sg-038d1e15159af04a1"
 default_include_dataVolume="yes"
 default_vm_policy="onDemand"
-default_image_vol_size=17
+default_image_vol_size=60
 default_interactive_s3_path_base="s3://statfungen/ftp_fgc_xqtl/interactive_sessions/"
 default_interactive_VM_path="/home/jovyan/"
 default_ide="nvim"
@@ -36,6 +36,7 @@ interactive_s3_path=""
 interactive_VM_path="$default_interactive_VM_path"
 ide="$default_ide"
 additional_mounts=()
+no_interactive_mount=false
 
 # Parse command line options
 while [[ "$#" -gt 0 ]]; do
@@ -57,6 +58,7 @@ while [[ "$#" -gt 0 ]]; do
         -is3|--interactive_s3_path) interactive_s3_path="$2"; shift ;;
         -ivm|--interactive_VM_path) interactive_VM_path="$2"; shift ;;
         -am|--additional_mounts) additional_mounts+=("$2"); shift ;;
+        --no-interactive-mount) no_interactive_mount=true; ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
@@ -71,17 +73,19 @@ if [[ -z "$password" ]]; then
     echo ""
 fi
 
-# Set interactive_s3_path based on user if not provided
-if [[ -z "$interactive_s3_path" ]]; then
-    if [[ "$user" == "admin" ]]; then
-        interactive_s3_path="${default_interactive_s3_path_base}rf2872/"
-    else
-        interactive_s3_path="${default_interactive_s3_path_base}${user}/"
+# Set interactive_s3_path based on user if not provided and if interactive mount is enabled
+if [[ "$no_interactive_mount" = false ]]; then
+    if [[ -z "$interactive_s3_path" ]]; then
+        if [[ "$user" == "admin" ]]; then
+            interactive_s3_path="${default_interactive_s3_path_base}rf2872/"
+        else
+            interactive_s3_path="${default_interactive_s3_path_base}${user}/"
+        fi
     fi
-fi
 
-# Check and create S3 path if it doesn't exist
-aws s3api head-object --bucket statfungen --key "${interactive_s3_path#s3://}" || aws s3api put-object --bucket statfungen --key "${interactive_s3_path#s3://}"
+    # Check and create S3 path if it doesn't exist
+    aws s3api head-object --bucket statfungen --key "${interactive_s3_path#s3://statfungen/}" || aws s3api put-object --bucket statfungen --key "${interactive_s3_path#s3://statfungen/}"
+fi
 
 dataVolumeOption=""
 if [[ $include_dataVolume == "yes" ]]; then
@@ -98,7 +102,11 @@ if [[ $include_dataVolume == "yes" ]]; then
     fi
 
     # Construct the dataVolumeOption with either the specified or default values
-    dataVolumeOption="--dataVolume [mode=rw]${s3_path}:${VM_path} --dataVolume [mode=rw]${interactive_s3_path}:${interactive_VM_path}"
+    dataVolumeOption="--dataVolume [mode=rw]${s3_path}:${VM_path}"
+    
+    if [[ "$no_interactive_mount" = false ]]; then
+        dataVolumeOption+=" --dataVolume [mode=rw]${interactive_s3_path}:${interactive_VM_path}"
+    fi
 
     # Add additional mount paths if provided
     for mount in "${additional_mounts[@]}"; do
@@ -145,6 +153,7 @@ echo "Interactive S3 Path: $interactive_s3_path"
 echo "Interactive VM Path: $interactive_VM_path"
 echo "IDE: $ide"
 echo "Additional Mounts: ${additional_mounts[@]}"
+echo "No Interactive Mount: $no_interactive_mount"
 echo
 
 # Log in
