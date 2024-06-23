@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # Default values for other parameters
-default_OP_IP="23.22.157.8"
-default_s3_path="s3://statfungen/ftp_fgc_xqtl/"
+default_OP_IP="44.222.241.133"
+default_s3_path="s3://gao-851725442056/ftp_fgc_xqtl/"
 default_VM_path="/data/"
 default_image="pixi-ru:latest"
 default_core=4
 default_mem=16
 default_publish="8888:8888"
-default_securityGroup="sg-038d1e15159af04a1"
+default_securityGroup="sg-02867677e76635b25"
 default_include_dataVolume="yes"
 default_vm_policy="onDemand"
 default_image_vol_size=60
@@ -19,6 +19,10 @@ default_ide="nvim"
 # Initialize variables to empty for user and password
 user=""
 password=""
+
+# New variables initialization for job_name and no_mount
+job_name="" # <- Added
+no_mount=false # <- Added
 
 # Initialize variables with default values for other parameters
 OP_IP="$default_OP_IP"
@@ -59,12 +63,14 @@ while [[ "$#" -gt 0 ]]; do
         -ivm|--interactive_VM_path) interactive_VM_path="$2"; shift ;;
         -am|--additional_mounts) additional_mounts+=("$2"); shift ;;
         --no-interactive-mount) no_interactive_mount=true; ;;
+        --no-mount) no_mount=true; ;; # <- Added
+        -jn|--job_name) job_name="$2"; shift ;; # <- Added
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
 done
 
-# Prompt for user and password if not provided via command line
+# Existing prompts for user and password if not provided via command line
 if [[ -z "$user" ]]; then
     read -p "Enter user for $OP_IP: " user
 fi
@@ -87,83 +93,40 @@ if [[ "$no_interactive_mount" = false ]]; then
     aws s3api head-object --bucket statfungen --key "${interactive_s3_path#s3://statfungen/}" || aws s3api put-object --bucket statfungen --key "${interactive_s3_path#s3://statfungen/}"
 fi
 
+# Data volume handling modified to account for no-mount
 dataVolumeOption=""
-if [[ $include_dataVolume == "yes" ]]; then
-    # If no s3_path is provided via the command-line, notify the user that the default will be used
-    if [[ -z "$s3_path" ]]; then
-        echo "s3_path is not provided. The default will be used: $default_s3_path"
-        s3_path=$default_s3_path
+if [[ $no_mount == false ]]; then
+    if [[ $include_dataVolume == "yes" ]]; then
+        dataVolumeOption="--dataVolume [mode=rw]${s3_path}:${VM_path}"
+        if [[ "$no_interactive_mount" = false ]]; then
+            dataVolumeOption+=" --dataVolume [mode=rw]${interactive_s3_path}:${interactive_VM_path}"
+        fi
+        for mount in "${additional_mounts[@]}"; do
+            dataVolumeOption+=" --dataVolume [mode=rw]${mount}"
+        done
     fi
-
-    # If no VM_path is provided via the command-line, notify the user that the default will be used
-    if [[ -z "$VM_path" ]]; then
-        echo "VM_path is not provided. The default will be used: $default_VM_path"
-        VM_path=$default_VM_path
-    fi
-
-    # Construct the dataVolumeOption with either the specified or default values
-    dataVolumeOption="--dataVolume [mode=rw]${s3_path}:${VM_path}"
-    
-    if [[ "$no_interactive_mount" = false ]]; then
-        dataVolumeOption+=" --dataVolume [mode=rw]${interactive_s3_path}:${interactive_VM_path}"
-    fi
-
-    # Add additional mount paths if provided
-    for mount in "${additional_mounts[@]}"; do
-        dataVolumeOption+=" --dataVolume [mode=rw]${mount}"
-    done
-fi
-if [[ $include_dataVolume == "no" ]]; then
-    dataVolumeOption=""
-    s3_path=""
-    VM_path=""
-    interactive_s3_path=""
-    interactive_VM_path=""
-    additional_mounts=()
 fi
 
 # Determine VM Policy
 lowercase_vm_policy=$(echo "$vm_policy" | tr '[:upper:]' '[:lower:]')
-if [ $lowercase_vm_policy == "spotonly" ]; then
+vm_policy_command=""
+if [ "$lowercase_vm_policy" == "spotonly" ]; then
     vm_policy_command="[spotOnly=true]"
-elif [ $lowercase_vm_policy == "ondemand" ]; then
+elif [ "$lowercase_vm_policy" == "ondemand" ]; then
     vm_policy_command="[onDemand=true]"
-elif [ $lowercase_vm_policy == "spotfirst" ]; then
+elif [ "$lowercase_vm_policy" == "spotfirst" ]; then
     vm_policy_command="[spotFirst=true]"
 else
     echo "Invalid VM Policy setting '$vm_policy'. Please use 'spotOnly', 'onDemand', or 'spotFirst'"
-    return 1
+    exit 1
 fi
 
-# Confirm variables (optional, for debugging or confirmation)
-echo "Using the following configurations:"
-echo "OP_IP: $OP_IP"
-echo "User: $user"
-# Echoing password is not recommended for security reasons
-echo "S3 Path: $s3_path"
-echo "VM Path: $VM_path"
-echo "Image: $image"
-echo "Core: $core"
-echo "Memory: $mem GB"
-echo "Publish: $publish"
-echo "Security Group: $securityGroup"
-echo "Include Data Volume: $include_dataVolume"
-echo "VM Policy: $vm_policy"
-echo "Interactive S3 Path: $interactive_s3_path"
-echo "Interactive VM Path: $interactive_VM_path"
-echo "IDE: $ide"
-echo "Additional Mounts: ${additional_mounts[@]}"
-echo "No Interactive Mount: $no_interactive_mount"
-echo
-
-# Log in
-echo "Logging in to $OP_IP"
-float login -a "$OP_IP" -u "$user" -p "$password"
-
-# Submit job and extract job ID
-echo "Submitting job..."
-# Will use default gateway g-1xpuesgrea6xclgj46sbf (should be the only gateway)
+# Adjust float submit command to include job name if provided
 float_submit="float submit -a $OP_IP -i $image -c $core -m $mem --vmPolicy $vm_policy_command --imageVolSize $image_vol_size --gateway g-9xahbrb5rkbs0ic8yzylk --migratePolicy [cpu.disable=true,mem.disable=true,stepAuto=true,evadeOOM=true] --publish $publish --securityGroup $securityGroup $dataVolumeOption --vmPolicy [onDemand=true] --withRoot"
+if [[ -n "$job_name" ]]; then
+    float_submit+=" -n $job_name"
+fi
+
 # If user is admin, grant them sudo access
 admin_role=$(float login --info | grep "role: admin")
 if [ ! -z "$admin_role" ]; then
@@ -191,7 +154,7 @@ if [[ "$ide" == "jupyter" ]]; then
     # Waiting for the job to execute and get autosave log 
     echo "Waiting for the job to execute and retrieve token (~7min)..."
     while true; do
-        url=$(float log -j "$jobid" cat stderr.autosave | grep token | head -n 1)
+        url=$(float log -j "$jobid" cat stderr.autosave | grep token= | head -n 1)
         if [[ $url == *token* ]]; then
             break # break it when got token
         else
