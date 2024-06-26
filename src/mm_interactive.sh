@@ -2,7 +2,7 @@
 
 # Default values for other parameters
 default_OP_IP="44.222.241.133"
-default_s3_path="s3://gao-851725442056/ftp_fgc_xqtl/"
+default_s3_path="s3://statfungen/ftp_fgc_xqtl/"
 default_VM_path="/data/"
 default_image="pixi-ru:latest"
 default_core=4
