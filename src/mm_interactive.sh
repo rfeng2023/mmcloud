@@ -126,7 +126,7 @@ echo "Logging in to $OP_IP"
 float login -a "$OP_IP" -u "$user" -p "$password"
 
 # Adjust float submit command to include job name if provided
-float_submit="float submit -a $OP_IP -i $image -c $core -m $mem --vmPolicy $vm_policy_command --imageVolSize $image_vol_size --gateway g-9xahbrb5rkbs0ic8yzylk --migratePolicy [cpu.disable=true,mem.disable=true,stepAuto=true,evadeOOM=true] --publish $publish --securityGroup $securityGroup $dataVolumeOption --vmPolicy [onDemand=true] --withRoot"
+float_submit="float submit -a $OP_IP -i $image -c $core -m $mem --vmPolicy $vm_policy_command --imageVolSize $image_vol_size --gateway g-9xahbrb5rkbs0ic8yzylk --migratePolicy [cpu.disable=true,mem.disable=true,stepAuto=true,evadeOOM=true] --publish $publish --securityGroup $securityGroup $dataVolumeOption --vmPolicy [onDemand=true] --withRoot --denyList [r5*, r6*, r7*] --allowList [m*]"
 if [[ -n "$job_name" ]]; then
     float_submit+=" -n $job_name"
 fi
