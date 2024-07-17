@@ -145,7 +145,8 @@ float_submit="float submit -a $OP_IP \
 $dataVolumeOption \
 --vmPolicy [onDemand=true] \
 --withRoot \
---allowList [m*]"
+--allowList [m*] \
+--env JUPYTER_RUNTIME_DIR=/tmp/jupyter_runtime"
 
 if [[ -n "$job_name" ]]; then 
     float_submit+=" -n $job_name"
