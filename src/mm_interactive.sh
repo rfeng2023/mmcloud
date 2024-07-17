@@ -9,6 +9,7 @@ default_core=4
 default_mem=16
 default_publish="8888:8888"
 default_securityGroup="sg-02867677e76635b25"
+default_gateway="g-9xahbrb5rkbs0ic8yzylk"
 default_include_dataVolume="yes"
 default_vm_policy="onDemand"
 default_image_vol_size=60
@@ -33,6 +34,7 @@ core="$default_core"
 mem="$default_mem"
 publish="$default_publish"
 securityGroup="$default_securityGroup"
+gateway="$default_gateway"
 include_dataVolume="$default_include_dataVolume"
 vm_policy="$default_vm_policy"
 image_vol_size="$default_image_vol_size"
@@ -121,12 +123,18 @@ else
     exit 1
 fi
 
+# Update security group and gateway if IP is 3.82.198.55
+if [[ "$OP_IP" = "3.82.198.55" ]]; then
+    gateway="g-4nntvdipikat0673xagju"
+    securityGroup=""
+fi
+
 # Log in
 echo "Logging in to $OP_IP"
 float login -a "$OP_IP" -u "$user" -p "$password"
 
 # Adjust float submit command to include job name if provided
-float_submit="float submit -a $OP_IP -i $image -c $core -m $mem --vmPolicy $vm_policy_command --imageVolSize $image_vol_size --gateway g-9xahbrb5rkbs0ic8yzylk --migratePolicy [cpu.disable=true,mem.disable=true,stepAuto=true,evadeOOM=true] --publish $publish --securityGroup $securityGroup $dataVolumeOption --vmPolicy [onDemand=true] --withRoot --allowList [m*]"
+float_submit="float submit -a $OP_IP -i $image -c $core -m $mem --vmPolicy $vm_policy_command --imageVolSize $image_vol_size --gateway $gateway --migratePolicy [cpu.disable=true,mem.disable=true,stepAuto=true,evadeOOM=true] --publish $publish --securityGroup $securityGroup $dataVolumeOption --vmPolicy [onDemand=true] --withRoot --allowList [m*]"
 if [[ -n "$job_name" ]]; then 
     float_submit+=" -n $job_name"
 fi
