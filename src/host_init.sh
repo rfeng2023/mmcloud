@@ -75,35 +75,65 @@ sleep 10s
 
 # vvv For files to be run in the container vvv
 # Create the entrypoint file that was overwritten
-# Also include pixi installations, as mounting to /home/jovyan and would have been overwritten
-echo -n "awscli
-curl
-git
-parallel
-tree
-unzip
-jupyterlab
-jupyter_client
-jupyter_core
-jupyter_server
-sos
-nbconvert-core
-micromamba
-notebook
-" > /home/jovyan/global_packages.txt
-
 echo -n "#!/bin/bash
 set -e
 cd /home/jovyan/
 
+### From Docker file
+apt-get update && apt-get -y install ca-certificates tzdata libgl1 libgomp1 less curl tmate jupyter-lab rstudio nvim micromamba
 
-# From Docker file
-pixi global install $(tr '\n' ' ' < /home/jovyan/global_packages.txt)
-export PATH="/home/jovyan/.pixi/bin:${PATH}"
+### From Entrypoint file
+# Function to check if a command is available
+is_available() {
+  command -v "$1" &> /dev/null
+}
 
-# From Entrypoint file
-curl -fsSL https://raw.githubusercontent.com/cumc/handson-tutorials/main/setup/course_entrypoint.sh | bash
-cd /home/jovyan/handson-tutorials/contents
-jupyter-lab
+# Function to start the terminal server
+start_terminal_server() {
+  echo "Starting terminal server ..."
+  tmate -F
+}
+
+# Check if VMUI variable is set
+if [[ -z "${VMUI}" ]]; then
+  echo "No UI specified."
+  start_terminal_server
+  exit 0
+fi
+
+# Check the value of VMUI and start the corresponding UI
+case "${VMUI}" in
+  jupyter)
+    if is_available jupyter-lab; then
+      echo "JupyterLab is available. Starting JupyterLab ..."
+      jupyter-lab
+    else
+      echo "JupyterLab is not available."
+      start_terminal_server
+    fi
+    ;;
+  rstudio)
+    if is_available rstudio; then
+      echo "RStudio is available. Starting RStudio ..."
+      rstudio
+    else
+      echo "RStudio is not available."
+      start_terminal_server
+    fi
+    ;;
+  nvim)
+    if is_available nvim; then
+      echo "Nvim is available. Starting Nvim ..."
+      nvim
+    else
+      echo "Nvim is not available."
+      start_terminal_server
+    fi
+    ;;
+  *)
+    echo "Unknown UI specified: ${VMUI}."
+    start_terminal_server
+    ;;
+esac
 " > /home/jovyan/entrypoint.sh
 chmod 755 /home/jovyan/entrypoint.sh
