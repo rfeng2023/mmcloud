@@ -50,7 +50,7 @@ if [[ ! -z $FOUND_METADATA ]]; then
     $JFS_NAME 2>&1 >/dev/null
 else
     # No previous metadata found, new mount expected
-    echo "Formatting Juicefs - no previous metadata found"
+    echo "Formatting Juicefs - no previous metadata $METADATA_ID found"
     /usr/local/bin/juicefs format --storage s3 \
     --bucket https://wanggroup.s3.us-east-1.amazonaws.com \
     --trash-days=0 \

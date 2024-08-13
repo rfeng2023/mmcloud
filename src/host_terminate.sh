@@ -13,19 +13,22 @@ function dump_metadata() {
 
 function cp_metadata() {
   # We will only copy the metadata to the bucket if it was created later than the current metadata (if it exists)
+  echo $(date): "Checking if '$METADATA_ID.meta.json.gz' exists in bucket"
   FOUND_METADATA=$(aws s3 ls s3://wanggroup | grep "$METADATA_ID.meta.json.gz" | awk '{print $4}')
 
   if [[ ! -z $FOUND_METADATA ]]; then
     # If previous metadata is found, compare the date of creation
-    FOUND_METADATA_DATE=$(date -d "$(aws s3 ls s3://rnaseq-full-1 | grep $METADATA_ID.meta.json.gz | awk '{print $1,$2}')" "+%Y-%m-%d %H:%M:%S")
+    echo $(date): "Previous '$METADATA_ID.meta.json.gz' found - Checking metadata time"
+    temp_metadata_date=$(aws s3 ls s3://wanggroup | grep $METADATA_ID.meta.json.gz | awk '{print $1,$2}')
+    FOUND_METADATA_DATE=$(date -d "$temp_metadata_date" "+%Y-%m-%d %H:%M:%S")
     
     if [[ $CURRENT_TIME < $FOUND_METADATA_DATE ]] ; then
       # If the METADATA date is AFTER the CURRENT_TIME, leave the metadata alone
-      echo $(date): "Latest metadata date in bucket is AFTER the current time"
+      echo $(date): "Latest metadata date in bucket is NEWER than current metadata"
       echo $(date): "Leaving metadata alone..."
     else
       # If the METADATA date is BEFORE the CURRENT_TIME, overwrite the metadata with our latest one
-      echo $(date): "Latest metadata date in bucket is AFTER the current time"
+      echo $(date): "Latest metadata date in bucket is OLDER than current metaata"
       echo $(date): "Copying latest metadata to bucket"
       aws s3 cp "$(echo $METADATA_ID).meta.json.gz" s3://wanggroup
       echo $(date): "Copying to bucket complete!"
