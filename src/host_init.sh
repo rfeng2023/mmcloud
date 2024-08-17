@@ -40,3 +40,4 @@ sleep 10s
 sudo mkdir -p /mnt/jfs/$FLOAT_USER
 sudo mkdir -p /mnt/jfs/$FLOAT_USER/.pixi
 sudo mkdir -p /mnt/jfs/$FLOAT_USER/micromamba
+sudo mkdir -p /mnt/jfs/$FLOAT_USER/.config/pixi
