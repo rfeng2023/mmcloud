@@ -37,7 +37,12 @@ nohup /usr/local/bin/juicefs mount \
 sleep 10s
 
 # Make the directories if it does not exist already
-sudo mkdir -p /mnt/jfs/$FLOAT_USER
-sudo mkdir -p /mnt/jfs/$FLOAT_USER/.pixi
-sudo mkdir -p /mnt/jfs/$FLOAT_USER/micromamba
-sudo mkdir -p /mnt/jfs/$FLOAT_USER/.config/pixi
+if [ ! -d "/mnt/jfs/$FLOAT_USER/" ]; then
+    sudo mkdir -p /mnt/jfs/$FLOAT_USER
+    sudo mkdir -p /mnt/jfs/$FLOAT_USER/.pixi
+    sudo mkdir -p /mnt/jfs/$FLOAT_USER/micromamba
+    sudo mkdir -p /mnt/jfs/$FLOAT_USER/.config
+
+    sudo chown -R ec2-user /mnt/jfs/$FLOAT_USER
+    sudo chgrp -R users /mnt/jfs/$FLOAT_USER
+fi

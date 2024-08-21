@@ -3,8 +3,8 @@ cd /home/jovyan
 
 # Link necessary dirs and files
 ln -s /mnt/jfs/$FLOAT_USER/.pixi /home/jovyan/.pixi
+echo 'default_channels = ["dnachun", "conda-forge", "bioconda"]' > /home/jovyan/.pixi/config.toml
 ln -s /mnt/jfs/$FLOAT_USER/.config /home/jovyan/.config
-echo 'default_channels = ["dnachun", "conda-forge", "bioconda"]' > /home/jovyan/.config/pixi/config.toml
 ln -s /mnt/jfs/$FLOAT_USER/micromamba /home/jovyan/micromamba
 
 # Remove already existing .bashrc and .profile
@@ -14,20 +14,12 @@ rm /home/jovyan/.bashrc /home/jovyan/.profile
 if [ ! -f /mnt/jfs/$FLOAT_USER/.bashrc ]; then
   cat << EOF > /mnt/jfs/$FLOAT_USER/.bashrc
 export PATH="\${HOME}/.pixi/bin:\${PATH}"
+unset PYTHONPATH
+export PYDEVD_DISABLE_FILE_VALIDATION=1
 EOF
 fi
 if [ ! -f /mnt/jfs/$FLOAT_USER/.profile ]; then
   cat << EOF > /mnt/jfs/$FLOAT_USER/.profile
-# ~/.profile: executed by the command interpreter for login shells.
-# This file is not read by bash(1), if ~/.bash_profile or ~/.bash_login
-# exists.
-# see /usr/share/doc/bash/examples/startup-files for examples.
-# the files are located in the bash-doc package.
-
-# the default umask is set in /etc/profile; for setting the umask
-# for ssh logins, install and configure the libpam-umask package.
-#umask 022
-
 # if running bash
 if [ -n "\$BASH_VERSION" ]; then
   # include .bashrc if it exists
