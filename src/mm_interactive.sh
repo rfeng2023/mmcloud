@@ -4,7 +4,7 @@
 default_OP_IP="44.222.241.133"
 default_s3_path="s3://statfungen/ftp_fgc_xqtl/"
 default_VM_path="/data/"
-default_image="pixi-ru:latest"
+default_image="docker.io/rfeng2023/pixi-jovyan:latest"
 default_core=4
 default_mem=16
 default_publish="8888:8888"
@@ -13,8 +13,6 @@ default_gateway="g-9xahbrb5rkbs0ic8yzylk"
 default_include_dataVolume="yes"
 default_vm_policy="onDemand"
 default_image_vol_size=60
-default_interactive_s3_path_base="s3://statfungen/ftp_fgc_xqtl/interactive_sessions/"
-default_interactive_VM_path="/home/jovyan/"
 default_ide="nvim"
 
 # Initialize variables to empty for user and password
@@ -38,8 +36,6 @@ gateway="$default_gateway"
 include_dataVolume="$default_include_dataVolume"
 vm_policy="$default_vm_policy"
 image_vol_size="$default_image_vol_size"
-interactive_s3_path=""
-interactive_VM_path="$default_interactive_VM_path"
 ide="$default_ide"
 additional_mounts=()
 no_interactive_mount=false
@@ -61,8 +57,6 @@ while [[ "$#" -gt 0 ]]; do
         -vm|--vmPolicy) vm_policy="$2"; shift ;;
         -ivs|--imageVolSize) image_vol_size="$2"; shift ;;
         -ide|--interactive_develop_env) ide="$2"; shift ;;
-        -is3|--interactive_s3_path) interactive_s3_path="$2"; shift ;;
-        -ivm|--interactive_VM_path) interactive_VM_path="$2"; shift ;;
         -am|--additional_mounts) additional_mounts+=("$2"); shift ;;
         --no-interactive-mount) no_interactive_mount=true; ;;
         --no-mount) no_mount=true; ;; # <- Added
@@ -81,28 +75,11 @@ if [[ -z "$password" ]]; then
     echo ""
 fi
 
-# Set interactive_s3_path based on user if not provided and if interactive mount is enabled
-if [[ "$no_interactive_mount" = false ]]; then
-    if [[ -z "$interactive_s3_path" ]]; then
-        if [[ "$user" == "admin" ]]; then
-            interactive_s3_path="${default_interactive_s3_path_base}rf2872/"
-        else
-            interactive_s3_path="${default_interactive_s3_path_base}${user}/"
-        fi
-    fi
-
-    # Check and create S3 path if it doesn't exist
-    aws s3api head-object --bucket statfungen --key "${interactive_s3_path#s3://statfungen/}" || aws s3api put-object --bucket statfungen --key "${interactive_s3_path#s3://statfungen/}"
-fi
-
 # Data volume handling modified to account for no-mount
 dataVolumeOption=""
 if [[ $no_mount == false ]]; then
     if [[ $include_dataVolume == "yes" ]]; then
         dataVolumeOption="--dataVolume [mode=rw]${s3_path}:${VM_path}"
-        if [[ "$no_interactive_mount" = false ]]; then
-            dataVolumeOption+=" --dataVolume [mode=rw]${interactive_s3_path}:${interactive_VM_path}"
-        fi
         for mount in "${additional_mounts[@]}"; do
             dataVolumeOption+=" --dataVolume [mode=rw]${mount}"
         done
@@ -129,6 +106,19 @@ if [[ "$OP_IP" = "3.82.198.55" ]]; then
     securityGroup="sg-00c7a6c97b097ec7b"
 fi
 
+# Helper function to find script dir - needed to find location of hostinit and job script
+function find_script_dir() {
+    SOURCE=${BASH_SOURCE[0]}
+    while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+        DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+        SOURCE=$(readlink "$SOURCE")
+        [[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+    done
+    DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+    echo $DIR
+}
+script_dir=$(find_script_dir)
+
 # Log in
 echo "Logging in to $OP_IP"
 float login -a "$OP_IP" -u "$user" -p "$password"
@@ -139,76 +129,67 @@ float_submit="float submit -a $OP_IP \
 --vmPolicy $vm_policy_command \
 --imageVolSize $image_vol_size \
 --gateway $gateway \
---migratePolicy [cpu.disable=true,mem.disable=true,stepAuto=true,evadeOOM=true] \
+--migratePolicy [disable=true] \
 --publish $publish \
 --securityGroup $securityGroup \
 $dataVolumeOption \
 --vmPolicy [onDemand=true] \
 --withRoot \
 --allowList [m*] \
---env JUPYTER_RUNTIME_DIR=/tmp/jupyter_runtime"
+-a $OP_IP -u $user -p $password \
+-e GRANT_SUDO=yes \
+--env JUPYTER_RUNTIME_DIR=/tmp/jupyter_runtime \
+--dirMap /mnt/jfs:/mnt/jfs \
+--hostInit $script_dir/host_init.sh \
+-j $script_dir/bind_mount.sh
+"
 
 if [[ -n "$job_name" ]]; then 
     float_submit+=" -n $job_name"
 fi
 
-# If user is admin, grant them sudo access
-admin_role=$(float login --info | grep "role: admin")
-if [ ! -z "$admin_role" ]; then
-    float_submit+=" -e GRANT_SUDO=yes"
-fi
-
-echo "[Float submit command]: $float_submit"
+echo -e "[Float submit command]: $float_submit"
 jobid=$(echo "yes" | $float_submit | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
-echo "Job ID: $jobid"
-
-if [[ "$ide" == "jupyter" ]]; then
-    # Waiting for the job initialization and extracting IP
-    echo "Waiting for the job to initialize and retrieve the public IP (~3min)..."
-    while true; do
-        IP_ADDRESS=$(float show -j "$jobid" | grep -A 1 portMappings | tail -n 1 | awk '{print $4}')
-        if [[ $IP_ADDRESS == *.* ]]; then
-            echo "Public IP: $IP_ADDRESS"
-            break # break it when got IP
-        else
-            echo "Still waiting for the job to initialize..."
-            sleep 60 # check it every 60 secs
-        fi
-    done
-
-    # Waiting for the job to execute and get autosave log 
-    echo "Waiting for the job to execute and retrieve token (~7min)..."
-    while true; do
-        url=$(float log -j "$jobid" cat stderr.autosave | grep token= | head -n 1)
-        if [[ $url == *token* ]]; then
-            break # break it when got token
-        else
-            echo "Still waiting for the job to execute..."
-            sleep 60 # check it every 60 secs
-        fi
-    done
-
-    # Modify and output URL
-    token=$(echo "$url" | sed -E 's|.*http://[^/]+/(lab\?token=[a-zA-Z0-9]+).*|\1|')
-    new_url="http://$IP_ADDRESS/$token"
-    echo "To access the server, copy this URL in a browser: $new_url"
-    echo "To access the server, copy this URL in a browser: $new_url" > "${jobid}_jupyter.log"
-else
-    # Waiting for the job initialization and extracting SSH session
-    echo "Waiting for the job to initialize and retrieve SSH session (~3min)..."
-    while true; do
-        ssh_session=$(float show -j "$jobid" | grep 'ssh session' | awk -F'ssh session: ' '{print $2}')
-        if [[ -n "$ssh_session" ]]; then
-            echo "SSH session: $ssh_session"
-            break # break it when got SSH session
-        else
-            echo "Still waiting for the job to initialize..."
-            sleep 60 # check it every 60 secs
-        fi
-    done
-
-    echo "SSH session: $ssh_session" > "${jobid}_${ide}.log"
+if [ ! -n "$jobid" ]; then
+    echo "Error returned from float submission command! Exiting..."
+    exit
 fi
+echo "JOB ID: $jobid"
+
+# Waiting for the job initialization and extracting IP
+echo "[$(date)]: Waiting to retrieve the public IP (~1min)..."
+while true; do
+    IP_ADDRESS=$(float show -j "$jobid" | grep -A 1 portMappings | tail -n 1 | awk '{print $4}')
+    if [[ -n "IP_ADDRESS" ]]; then
+        echo "PUBLIC IP: $IP_ADDRESS"
+        break # break it when got IP
+    else
+        sleep 60 # check it every 60 secs
+        echo "[$(date)]: Still waiting to retrieve public ip..."
+    fi
+done
+
+# Waiting for the job to execute and get autosave log 
+echo "[$(date)]: Waiting for the job to execute and retrieve tmate web session (~5min)..."
+while true; do
+    url=$(float log -j "$jobid" cat stdout.autosave | grep "web session:" | head -n 1)
+    if [[ -n "$url" ]]; then
+        # Modify and output URL
+        tmate_session=$(echo "$url" | awk '{print $3}')
+        echo "To access the server, copy this URL in a browser: $tmate_session"
+        echo "To access the server, copy this URL in a browser: $tmate_session" > "${jobid}_tmate_session.log"
+
+        # tmate session line will always come with ssh session line
+        ssh=$(float log -j "$jobid" cat stdout.autosave | grep "ssh session:" | head -n 1)
+        ssh_tmate=$(echo "$ssh" | awk '{print $3,$4}')
+        echo "SSH session: $ssh_tmate"
+        echo "SSH session: $ssh_tmate" > "${jobid}_${ide}.log"
+        break
+    else
+        sleep 60 # check it every 60 secs
+        echo "[$(date)]: Still waiting for the job to execute..."
+    fi
+done
 
 # Output suspend command for all IDEs
 suspend_command="float suspend -j $jobid"
