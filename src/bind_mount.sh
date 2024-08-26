@@ -45,8 +45,14 @@ ln -s /mnt/jfs/$FLOAT_USER/.profile /home/jovyan/.profile
 
 # Run the original entrypoint script
 # Function to check if a command is available
+export PATH="/home/jovyan/.pixi/bin":${PATH}
 is_available() {
-  command -v "$1" &> /dev/null
+  location=$(which "$1" 2> /dev/null)
+  if [ ! -z $location ]; then
+    return 0
+  else
+    return 1
+  fi
 }
 
 # Function to start the terminal server
@@ -64,7 +70,7 @@ fi
 
 # Check the value of VMUI and start the corresponding UI
 case "${VMUI}" in
-  jupyter)
+  jupyter|jupyter-lab)
     if is_available jupyter-lab; then
       echo "JupyterLab is available. Starting JupyterLab ..."
       jupyter-lab
@@ -91,6 +97,10 @@ case "${VMUI}" in
       start_terminal_server
     fi
     ;;
+  tmate)
+    echo "Starting tmate."
+    start_terminal_server
+  ;;
   *)
     echo "Unknown UI specified: ${VMUI}."
     start_terminal_server
