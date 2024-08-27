@@ -140,7 +140,7 @@ $dataVolumeOption \
 -e GRANT_SUDO=yes \
 --env JUPYTER_RUNTIME_DIR=/tmp/jupyter_runtime \
 --env VMUI=$ide \
---env PYDEVD_DISABLE_FILE_VALIDATION=1 \
+--env JUPYTER_ENABLE_LAB=TRUE \
 --dirMap /mnt/jfs:/mnt/jfs \
 --hostInit $script_dir/host_init.sh \
 -j $script_dir/bind_mount.sh
