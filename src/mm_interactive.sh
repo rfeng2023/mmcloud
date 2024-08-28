@@ -129,11 +129,10 @@ float_submit="float submit -a $OP_IP \
 --vmPolicy $vm_policy_command \
 --imageVolSize $image_vol_size \
 --gateway $gateway \
---migratePolicy [disable=true] \
+--migratePolicy [disable=true, evadeOOM=true] \
 --publish $publish \
 --securityGroup $securityGroup \
 $dataVolumeOption \
---vmPolicy [onDemand=true] \
 --withRoot \
 --allowList [m*] \
 -a $OP_IP -u $user -p $password \
@@ -141,10 +140,11 @@ $dataVolumeOption \
 --env JUPYTER_RUNTIME_DIR=/tmp/jupyter_runtime \
 --env VMUI=$ide \
 --env JUPYTER_ENABLE_LAB=TRUE \
---dirMap /mnt/jfs:/mnt/jfs \
---hostInit $script_dir/host_init.sh \
--j $script_dir/bind_mount.sh
 "
+# for package installation setup
+if [[ $image == "docker.io/rfeng2023/pixi-jovyan:latest" ]]; then
+    float_submit+=" --dirMap /mnt/jfs:/mnt/jfs --hostInit $script_dir/host_init.sh -j $script_dir/bind_mount.sh"
+fi
 
 if [[ -n "$job_name" ]]; then 
     float_submit+=" -n $job_name"
