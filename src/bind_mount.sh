@@ -4,8 +4,15 @@ cd /home/jovyan
 # Link necessary dirs and files
 ln -s /mnt/jfs/$FLOAT_USER/.pixi /home/jovyan/.pixi
 echo 'default_channels = ["dnachun", "conda-forge", "bioconda"]' > /home/jovyan/.pixi/config.toml
-ln -s /mnt/jfs/$FLOAT_USER/.config /home/jovyan/.config
 ln -s /mnt/jfs/$FLOAT_USER/micromamba /home/jovyan/micromamba
+ln -s /mnt/jfs/$FLOAT_USER/.config /home/jovyan/.config
+ln -s /mnt/jfs/$FLOAT_USER/.cache /home/jovyan/.cache
+ln -s /mnt/jfs/$FLOAT_USER/.conda /home/jovyan/.conda
+ln -s /mnt/jfs/$FLOAT_USER/.condarc /home/jovyan/.condarc
+ln -s /mnt/jfs/$FLOAT_USER/.ipython /home/jovyan/.ipython
+ln -s /mnt/jfs/$FLOAT_USER/.jupyter /home/jovyan/.jupyter
+ln -s /mnt/jfs/$FLOAT_USER/.local /home/jovyan/.local
+ln -s /mnt/jfs/$FLOAT_USER/.mamba /home/jovyan/.mamba
 
 # Remove already existing .bashrc and .profile
 rm /home/jovyan/.bashrc /home/jovyan/.profile
