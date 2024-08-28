@@ -37,12 +37,52 @@ nohup /usr/local/bin/juicefs mount \
 sleep 10s
 
 # Make the directories if it does not exist already
+# Reason why for so many if statements is to allow for new directories
+# to be made without relying on if the user exists
 if [ ! -d "/mnt/jfs/$FLOAT_USER/" ]; then
     sudo mkdir -p /mnt/jfs/$FLOAT_USER
-    sudo mkdir -p /mnt/jfs/$FLOAT_USER/.pixi
-    sudo mkdir -p /mnt/jfs/$FLOAT_USER/micromamba
-    sudo mkdir -p /mnt/jfs/$FLOAT_USER/.config
-
     sudo chown -R ec2-user /mnt/jfs/$FLOAT_USER
     sudo chgrp -R users /mnt/jfs/$FLOAT_USER
+fi
+if [ ! -d "/mnt/jfs/$FLOAT_USER/.pixi" ]; then
+    sudo mkdir -p /mnt/jfs/$FLOAT_USER/.pixi
+fi
+
+if [ ! -d "/mnt/jfs/$FLOAT_USER/micromamba" ]; then
+    sudo mkdir -p /mnt/jfs/$FLOAT_USER/micromamba
+fi
+
+if [ ! -d "/mnt/jfs/$FLOAT_USER/.config" ]; then
+    sudo mkdir -p /mnt/jfs/$FLOAT_USER/.config
+fi
+
+if [ ! -d "/mnt/jfs/$FLOAT_USER/.cache" ]; then
+    sudo mkdir -p /mnt/jfs/$FLOAT_USER/.cache
+fi
+
+if [ ! -d "/mnt/jfs/$FLOAT_USER/.conda" ]; then
+    sudo mkdir -p /mnt/jfs/$FLOAT_USER/.conda
+fi
+
+if [ ! -d "/mnt/jfs/$FLOAT_USER/.condarc" ]; then
+    # A file, not a directory
+    sudo touch /mnt/jfs/$FLOAT_USER/.condarc
+    sudo chown ec2-user /mnt/jfs/$FLOAT_USER/.condarc
+    sudo chgrp users /mnt/jfs/$FLOAT_USER/.condarc
+fi
+
+if [ ! -d "/mnt/jfs/$FLOAT_USER/.ipython" ]; then
+    sudo mkdir -p /mnt/jfs/$FLOAT_USER/.ipython
+fi
+
+if [ ! -d "/mnt/jfs/$FLOAT_USER/.jupyter" ]; then
+    sudo mkdir -p /mnt/jfs/$FLOAT_USER/.jupyter
+fi
+
+if [ ! -d "/mnt/jfs/$FLOAT_USER/.local" ]; then
+    sudo mkdir -p /mnt/jfs/$FLOAT_USER/.local
+fi
+
+if [ ! -d "/mnt/jfs/$FLOAT_USER/.mamba" ]; then
+    sudo mkdir -p /mnt/jfs/$FLOAT_USER/.mamba
 fi
