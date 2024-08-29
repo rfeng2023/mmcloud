@@ -46,22 +46,32 @@ if [ ! -d "/mnt/jfs/$FLOAT_USER/" ]; then
 fi
 if [ ! -d "/mnt/jfs/$FLOAT_USER/.pixi" ]; then
     sudo mkdir -p /mnt/jfs/$FLOAT_USER/.pixi
+    sudo chown -R ec2-user /mnt/jfs/$FLOAT_USER/.pixi
+    sudo chgrp -R users /mnt/jfs/$FLOAT_USER/.pixi
 fi
 
 if [ ! -d "/mnt/jfs/$FLOAT_USER/micromamba" ]; then
     sudo mkdir -p /mnt/jfs/$FLOAT_USER/micromamba
+    sudo chown -R ec2-user /mnt/jfs/$FLOAT_USER/micromamba
+    sudo chgrp -R users /mnt/jfs/$FLOAT_USER/micromamba
 fi
 
 if [ ! -d "/mnt/jfs/$FLOAT_USER/.config" ]; then
     sudo mkdir -p /mnt/jfs/$FLOAT_USER/.config
+    sudo chown -R ec2-user /mnt/jfs/$FLOAT_USER/.config
+    sudo chgrp -R users /mnt/jfs/$FLOAT_USER/.config
 fi
 
 if [ ! -d "/mnt/jfs/$FLOAT_USER/.cache" ]; then
     sudo mkdir -p /mnt/jfs/$FLOAT_USER/.cache
+    sudo chown -R ec2-user /mnt/jfs/$FLOAT_USER/.cache
+    sudo chgrp -R users /mnt/jfs/$FLOAT_USER/.cache
 fi
 
 if [ ! -d "/mnt/jfs/$FLOAT_USER/.conda" ]; then
     sudo mkdir -p /mnt/jfs/$FLOAT_USER/.conda
+    sudo chown -R ec2-user /mnt/jfs/$FLOAT_USER/.conda
+    sudo chgrp -R users /mnt/jfs/$FLOAT_USER/.conda
 fi
 
 if [ ! -d "/mnt/jfs/$FLOAT_USER/.condarc" ]; then
@@ -73,16 +83,24 @@ fi
 
 if [ ! -d "/mnt/jfs/$FLOAT_USER/.ipython" ]; then
     sudo mkdir -p /mnt/jfs/$FLOAT_USER/.ipython
+    sudo chown -R ec2-user /mnt/jfs/$FLOAT_USER/.ipython
+    sudo chgrp -R users /mnt/jfs/$FLOAT_USER/.ipython
 fi
 
 if [ ! -d "/mnt/jfs/$FLOAT_USER/.jupyter" ]; then
     sudo mkdir -p /mnt/jfs/$FLOAT_USER/.jupyter
+    sudo chown -R ec2-user /mnt/jfs/$FLOAT_USER/.jupyter
+    sudo chgrp -R users /mnt/jfs/$FLOAT_USER/.jupyter
 fi
 
 if [ ! -d "/mnt/jfs/$FLOAT_USER/.local" ]; then
     sudo mkdir -p /mnt/jfs/$FLOAT_USER/.local
+    sudo chown -R ec2-user /mnt/jfs/$FLOAT_USER/.local
+    sudo chgrp -R users /mnt/jfs/$FLOAT_USER/.local
 fi
 
 if [ ! -d "/mnt/jfs/$FLOAT_USER/.mamba" ]; then
     sudo mkdir -p /mnt/jfs/$FLOAT_USER/.mamba
+    sudo chown -R ec2-user /mnt/jfs/$FLOAT_USER/.mamba
+    sudo chgrp -R users /mnt/jfs/$FLOAT_USER/.mamba
 fi
