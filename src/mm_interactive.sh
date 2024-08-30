@@ -143,7 +143,7 @@ $dataVolumeOption \
 "
 # for package installation setup
 if [[ $image == "docker.io/rfeng2023/pixi-jovyan:latest" ]]; then
-    float_submit+=" --dirMap /mnt/jfs:/mnt/jfs --hostInit $script_dir/host_init.sh -j $script_dir/bind_mount.sh"
+    float_submit+=" --dirMap /mnt/jfs:/mnt/jfs --hostInit $script_dir/host_init.sh -j $script_dir/bind_mount.sh --dataVolume [size=100]:/mnt/jfs_cache"
 fi
 
 if [[ -n "$job_name" ]]; then 
