@@ -31,6 +31,7 @@ nohup /usr/local/bin/juicefs mount \
 --buffer-size 600 \
 --writeback \
 --cache-dir /mnt/jfs_cache \
+--cache-size 102400 \
 /mnt/jfs 1> /dev/null  2>&1 &
 
 # Make sure it is mounted before end script
