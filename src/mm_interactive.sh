@@ -13,6 +13,7 @@ default_gateway="g-9xahbrb5rkbs0ic8yzylk"
 default_include_dataVolume="yes"
 default_vm_policy="onDemand"
 default_image_vol_size=60
+default_root_vol_size=40
 default_ide="tmate"
 
 # Initialize variables to empty for user and password
@@ -36,6 +37,7 @@ gateway="$default_gateway"
 include_dataVolume="$default_include_dataVolume"
 vm_policy="$default_vm_policy"
 image_vol_size="$default_image_vol_size"
+root_vol_size="$default_root_vol_size"
 ide="$default_ide"
 additional_mounts=()
 no_interactive_mount=false
@@ -56,6 +58,7 @@ while [[ "$#" -gt 0 ]]; do
         -dv|--dataVolume) include_dataVolume="$2"; shift ;;
         -vm|--vmPolicy) vm_policy="$2"; shift ;;
         -ivs|--imageVolSize) image_vol_size="$2"; shift ;;
+        -rvs|--rootVolSize) root_vol_size="$2"; shift ;;
         -ide|--interactive_develop_env) ide="$2"; shift ;;
         -am|--additional_mounts) additional_mounts+=("$2"); shift ;;
         --no-interactive-mount) no_interactive_mount=true; ;;
@@ -128,6 +131,7 @@ float_submit="float submit -a $OP_IP \
 -i $image -c $core -m $mem \
 --vmPolicy $vm_policy_command \
 --imageVolSize $image_vol_size \
+--rootVolSize $root_vol_size \
 --gateway $gateway \
 --migratePolicy [disable=true, evadeOOM=true] \
 --publish $publish \
