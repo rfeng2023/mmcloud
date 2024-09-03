@@ -13,7 +13,7 @@ default_gateway="g-9xahbrb5rkbs0ic8yzylk"
 default_include_dataVolume="yes"
 default_vm_policy="onDemand"
 default_image_vol_size=60
-default_root_vol_size=40
+default_root_vol_size=70
 default_ide="tmate"
 
 # Initialize variables to empty for user and password
