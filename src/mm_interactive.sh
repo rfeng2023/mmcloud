@@ -133,7 +133,7 @@ float_submit="float submit -a $OP_IP \
 --imageVolSize $image_vol_size \
 --rootVolSize $root_vol_size \
 --gateway $gateway \
---migratePolicy [disable=true, evadeOOM=true] \
+--migratePolicy [disable=true, evadeOOM=false] \
 --publish $publish \
 --securityGroup $securityGroup \
 $dataVolumeOption \
