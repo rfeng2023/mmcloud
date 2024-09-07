@@ -14,7 +14,7 @@ show_help() {
     echo "  --dryrun                                  Execute a dry run, printing commands without running them."
     echo "  --entrypoint '<command>'                  Set the initial command to run in the job script (required)."
     echo "  --image <value>                           Specify the Docker image to use for the job (required)."
-    echo "  --vm-policy <spotOnly|onDemand|spotFirst> Specify On-demand or Spot instance (default: spotOnly)".
+    echo "  --vm-policy <spotOnly|onDemand|spotFirst> Specify On-demand or Spot instance (default: spotFirst)".
     echo "  --job-size <value>                        Set the number of commands per job for creating virtual machines (required)."
     echo "  --mount <bucket>:<local>                  Mount an S3 bucket to a local directory. Format: <bucket>:<local path> (optional)."
     echo "  --mountOpt <value>                        Specify mount options for the bucket (required if --mount is used)."
@@ -38,7 +38,7 @@ c_min=""
 c_max=""
 m_min=""
 m_max=""
-vm_policy="spotOnly"
+vm_policy="spotFirst"
 declare -a mountOpt=()
 image=""
 entrypoint=""
