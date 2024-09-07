@@ -15,15 +15,15 @@ echo "Formatting Juicefs"
 /usr/local/bin/juicefs format --storage s3 \
 --bucket https://wanggroup.s3.us-east-1.amazonaws.com \
 --trash-days=0 \
-"redis://clustercfg.gao-package-installation.tw2oou.memorydb.us-east-1.amazonaws.com:6379/1" \
-wanggroup-package-installation-memoryDB 2>&1 >/dev/null
+"rediss://clustercfg.gao-package-installation.tw2oou.memorydb.us-east-1.amazonaws.com:6379/1" \
+wanggroup-package-installation-memory 2>&1 >/dev/null
 
 # Mount Juicefs
 echo "Mounting juicefs"
 sudo mkdir -p /mnt/jfs
 sudo chmod 777 /mnt/jfs
 nohup /usr/local/bin/juicefs mount \
-"redis://clustercfg.gao-package-installation.tw2oou.memorydb.us-east-1.amazonaws.com:6379/1" \
+"rediss://clustercfg.gao-package-installation.tw2oou.memorydb.us-east-1.amazonaws.com:6379/1" \
 --buffer-size 600 \
 --writeback \
 --cache-dir /mnt/jfs_cache \
