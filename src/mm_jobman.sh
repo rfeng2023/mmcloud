@@ -340,14 +340,14 @@ mount_buckets() {
   # If just one mount option, use the same one for all bucket mounting
   if [ ${#mountOpt[@]} -eq 1 ]; then
     for i in "${!mount_local[@]}"; do
-        dataVolume_cmd+="--dataVolume '[$mountOpt]s3://${mount_remote[$i]}:${mount_local[$i]}' "
+        dataVolume_cmd+="--dataVolume '[$mountOpt,endpoint=s3.us-east-1.amazonaws.com]s3://${mount_remote[$i]}:${mount_local[$i]}' "
     done
 
   # If more than one mount option, we expect there to be the same number of mounted buckets
   else
     if [ ${#mountOpt[@]} -eq  ${#mount_local[@]} ]; then
       for i in "${!mountOpt[@]}"; do
-            dataVolume_cmd+="--dataVolume '[${mountOpt[$i]}]s3://${mount_remote[$i]}:${mount_local[$i]}' "
+            dataVolume_cmd+="--dataVolume '[${mountOpt[$i]},endpoint=s3.us-east-1.amazonaws.com]s3://${mount_remote[$i]}:${mount_local[$i]}' "
       done
     else
       # Number of mountOptions > 1 and dne number of buckets

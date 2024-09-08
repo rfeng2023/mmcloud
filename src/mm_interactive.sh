@@ -2,7 +2,7 @@
 
 # Default values for other parameters
 default_OP_IP="44.222.241.133"
-default_s3_path="s3://statfungen/ftp_fgc_xqtl/"
+default_s3_path="s3://statfungen/ftp_fgc_xqtl"
 default_VM_path="/data/"
 default_image="docker.io/peterz27/sos-jupyter"
 default_core=4
@@ -82,9 +82,9 @@ fi
 dataVolumeOption=""
 if [[ $no_mount == false ]]; then
     if [[ $include_dataVolume == "yes" ]]; then
-        dataVolumeOption="--dataVolume [mode=rw]${s3_path}:${VM_path}"
+        dataVolumeOption="--dataVolume [mode=rw,endpoint=s3.us-east-1.amazonaws.com]${s3_path}:${VM_path}"
         for mount in "${additional_mounts[@]}"; do
-            dataVolumeOption+=" --dataVolume [mode=rw]${mount}"
+            dataVolumeOption+=" --dataVolume [mode=rw,endpoint=s3.us-east-1.amazonaws.com]${mount}"
         done
     fi
 fi
@@ -133,12 +133,12 @@ float_submit="float submit -a $OP_IP \
 --imageVolSize $image_vol_size \
 --rootVolSize $root_vol_size \
 --gateway $gateway \
---migratePolicy '[disable=true,evadeOOM=false]' \
+--migratePolicy [disable=true,evadeOOM=false] \
 --publish $publish \
 --securityGroup $securityGroup \
 $dataVolumeOption \
 --withRoot \
---allowList '[m*]' \
+--allowList [m*] \
 -a $OP_IP -u $user -p $password \
 -e GRANT_SUDO=yes \
 --env JUPYTER_RUNTIME_DIR=/tmp/jupyter_runtime \
