@@ -199,9 +199,8 @@ if [[ $image == *"pixi-jovyan"* ]]; then
                 echo "[$(date)]: Still waiting for the job to execute..."
             fi
         done
-    fi
 
-    if [ "$ide" == "jupyter" ] || [ "$ide" == "jupyter-lab" ]; then
+    elif [ "$ide" == "jupyter" ] || [ "$ide" == "jupyter-lab" ]; then
         # Waiting for the job to execute and get autosave log 
         echo "[$(date)]: Waiting for the job to execute and retrieve jupyter token (~10min)..."
         while true; do
@@ -237,6 +236,43 @@ if [[ $image == *"pixi-jovyan"* ]]; then
             fi
         done
     fi
+
+# Else for any other image, if there is a jupyter ide specified, do the jupyter output
+elif [ "$ide" == "jupyter" ] || [ "$ide" == "jupyter-lab" ]; then
+    # Waiting for the job to execute and get autosave log 
+    echo "[$(date)]: Waiting for the job to execute and retrieve jupyter token (~10min)..."
+    while true; do
+        url=$(float log -j "$jobid" cat stderr.autosave | grep token= | head -n 1)
+        no_jupyter=$(float log -j "$jobid" cat stdout.autosave | grep "JupyterLab is not available." | head -n 1)
+
+        # If jupyter token and URL found
+        if [[ $url == *token* ]]; then
+            # Modify and output URL
+            IP_ADDRESS=$(float show -j "$jobid" | grep -A 1 portMappings | tail -n 1 | awk '{print $4}')
+            token=$(echo "$url" | sed -E 's|.*http://[^/]+/(lab\?token=[a-zA-Z0-9]+).*|\1|')
+            new_url="http://$IP_ADDRESS/$token"
+            echo "To access the server, copy this URL in a browser: $new_url"
+            echo "To access the server, copy this URL in a browser: $new_url" > "${jobid}_jupyter.log"
+            break # break it when got token
+        # If jupyter lab is not installed, do tmate section
+        elif [[ -n $no_jupyter ]]; then
+            echo "[$(date)]: WARNING: No JupyterLab installed under this user. Sharing tmate information:"
+            url=$(float log -j "$jobid" cat stdout.autosave | grep "web session:" | head -n 1)
+            tmate_session=$(echo "$url" | awk '{print $3}')
+            echo "To access the server, copy this URL in a browser: $tmate_session"
+            echo "To access the server, copy this URL in a browser: $tmate_session" > "${jobid}_tmate_session.log"
+
+            # tmate session line will always come with ssh session line
+            ssh=$(float log -j "$jobid" cat stdout.autosave | grep "ssh session:" | head -n 1)
+            ssh_tmate=$(echo "$ssh" | awk '{print $3,$4}')
+            echo "SSH session: $ssh_tmate"
+            echo "SSH session: $ssh_tmate" > "${jobid}_${ide}.log"
+            break
+        else
+            sleep 60 # check it every 60 secs
+            echo "[$(date)]: Still waiting for the job to generate token..."
+        fi
+    done
 fi
 
 # Output suspend command for all IDEs
