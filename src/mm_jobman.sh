@@ -378,7 +378,7 @@ calculate_max_parallel_jobs() {
     min_mem_per_cmd=$2    # Minimum memory required per job in GB
 
     # Available system resources
-    available_cores=$(nproc)  # Total available CPU cores
+    available_cores=$(lscpu | grep "CPU(s):" | head -n 1 | awk '{print $2}')  # Total available CPU cores
     # available_memory_gb=$(free -m | grep Mem: | awk '{print $2}' | awk '{print int($1/1024)}')
     available_memory_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
     available_memory_gb=$((available_memory_kb / 1024 / 1024))
