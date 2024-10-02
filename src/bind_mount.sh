@@ -1,21 +1,22 @@
 #!/bin/bash
-cd /home/jovyan
+username=$(whoami)
+cd /home/$username
 
 # Link necessary dirs and files
-ln -s /mnt/jfs/$FLOAT_USER/.pixi /home/jovyan/.pixi
-echo 'default_channels = ["dnachun", "conda-forge", "bioconda"]' > /home/jovyan/.pixi/config.toml
-ln -s /mnt/jfs/$FLOAT_USER/micromamba /home/jovyan/micromamba
-ln -s /mnt/jfs/$FLOAT_USER/.config /home/jovyan/.config
-ln -s /mnt/jfs/$FLOAT_USER/.cache /home/jovyan/.cache
-ln -s /mnt/jfs/$FLOAT_USER/.conda /home/jovyan/.conda
-ln -s /mnt/jfs/$FLOAT_USER/.condarc /home/jovyan/.condarc
-ln -s /mnt/jfs/$FLOAT_USER/.ipython /home/jovyan/.ipython
-ln -s /mnt/jfs/$FLOAT_USER/.jupyter /home/jovyan/.jupyter
-ln -s /mnt/jfs/$FLOAT_USER/.local /home/jovyan/.local
-ln -s /mnt/jfs/$FLOAT_USER/.mamba /home/jovyan/.mamba
+ln -s /mnt/jfs/$FLOAT_USER/.pixi /home/$username/.pixi
+echo 'default_channels = ["dnachun", "conda-forge", "bioconda"]' > /home/$username/.pixi/config.toml
+ln -s /mnt/jfs/$FLOAT_USER/micromamba /home/$username/micromamba
+ln -s /mnt/jfs/$FLOAT_USER/.config /home/$username/.config
+ln -s /mnt/jfs/$FLOAT_USER/.cache /home/$username/.cache
+ln -s /mnt/jfs/$FLOAT_USER/.conda /home/$username/.conda
+ln -s /mnt/jfs/$FLOAT_USER/.condarc /home/$username/.condarc
+ln -s /mnt/jfs/$FLOAT_USER/.ipython /home/$username/.ipython
+ln -s /mnt/jfs/$FLOAT_USER/.jupyter /home/$username/.jupyter
+ln -s /mnt/jfs/$FLOAT_USER/.local /home/$username/.local
+ln -s /mnt/jfs/$FLOAT_USER/.mamba /home/$username/.mamba
 
 # Remove already existing .bashrc and .profile
-rm /home/jovyan/.bashrc /home/jovyan/.profile
+rm /home/$username/.bashrc /home/$username/.profile
 
 # Set a basic .bashrc and .profile if jfs does not have them
 if [ ! -f /mnt/jfs/$FLOAT_USER/.bashrc ]; then
@@ -47,12 +48,12 @@ fi
 EOF
 fi
 
-ln -s /mnt/jfs/$FLOAT_USER/.bashrc /home/jovyan/.bashrc
-ln -s /mnt/jfs/$FLOAT_USER/.profile /home/jovyan/.profile
+ln -s /mnt/jfs/$FLOAT_USER/.bashrc /home/$username/.bashrc
+ln -s /mnt/jfs/$FLOAT_USER/.profile /home/$username/.profile
 
 # Run the original entrypoint script
 # Function to check if a command is available
-export PATH="/home/jovyan/.pixi/bin":${PATH}
+export PATH="/home/$username/.pixi/bin":${PATH}
 is_available() {
   location=$(which "$1" 2> /dev/null)
   if [ ! -z $location ]; then
