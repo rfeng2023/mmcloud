@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Default values for other parameters
+# Default values for parameters
 default_OP_IP="44.222.241.133"
 default_s3_path="s3://statfungen/ftp_fgc_xqtl"
 default_VM_path="/data/"
@@ -17,15 +17,11 @@ default_root_vol_size=70
 default_ide="tmate"
 default_package_installation="false"
 
-# Initialize variables to empty for user and password
+# Initialize variables
 user=""
 password=""
-
-# New variables initialization for job_name and no_mount
-job_name="" # <- Added
-no_mount=false # <- Added
-
-# Initialize variables with default values for other parameters
+job_name=""
+no_mount=false
 OP_IP="$default_OP_IP"
 s3_path="$default_s3_path"
 VM_path="$default_VM_path"
@@ -64,15 +60,15 @@ while [[ "$#" -gt 0 ]]; do
         -ide|--interactive_develop_env) ide="$2"; shift ;;
         -am|--additional_mounts) additional_mounts+=("$2"); shift ;;
         --no-interactive-mount) no_interactive_mount=true; ;;
-        --no-mount) no_mount=true; ;; # <- Added
-        -jn|--job_name) job_name="$2"; shift ;; # <- Added
+        --no-mount) no_mount=true; ;;
+        -jn|--job_name) job_name="$2"; shift ;;
         --package-installation) package_installation=true; ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
 done
 
-# Existing prompts for user and password if not provided via command line
+# Prompt for user and password if not provided
 if [[ -z "$user" ]]; then
     read -p "Enter user for $OP_IP: " user
 fi
@@ -81,30 +77,26 @@ if [[ -z "$password" ]]; then
     echo ""
 fi
 
-# Data volume handling modified to account for no-mount
+# Data volume handling
 dataVolumeOption=""
-if [[ $no_mount == false ]]; then
-    if [[ $include_dataVolume == "yes" ]]; then
-        dataVolumeOption="--dataVolume [mode=rw,endpoint=s3.us-east-1.amazonaws.com]${s3_path}:${VM_path}"
-        for mount in "${additional_mounts[@]}"; do
-            dataVolumeOption+=" --dataVolume [mode=rw,endpoint=s3.us-east-1.amazonaws.com]${mount}"
-        done
-    fi
+if [[ $no_mount == false && $include_dataVolume == "yes" ]]; then
+    dataVolumeOption="--dataVolume [mode=rw,endpoint=s3.us-east-1.amazonaws.com]${s3_path}:${VM_path}"
+    for mount in "${additional_mounts[@]}"; do
+        dataVolumeOption+=" --dataVolume [mode=rw,endpoint=s3.us-east-1.amazonaws.com]${mount}"
+    done
 fi
 
 # Determine VM Policy
 lowercase_vm_policy=$(echo "$vm_policy" | tr '[:upper:]' '[:lower:]')
-vm_policy_command=""
-if [ "$lowercase_vm_policy" == "spotonly" ]; then
-    vm_policy_command="[spotOnly=true]"
-elif [ "$lowercase_vm_policy" == "ondemand" ]; then
-    vm_policy_command="[onDemand=true]"
-elif [ "$lowercase_vm_policy" == "spotfirst" ]; then
-    vm_policy_command="[spotFirst=true]"
-else
-    echo "Invalid VM Policy setting '$vm_policy'. Please use 'spotOnly', 'onDemand', or 'spotFirst'"
-    exit 1
-fi
+case "$lowercase_vm_policy" in
+    spotonly) vm_policy_command="[spotOnly=true]" ;;
+    ondemand) vm_policy_command="[onDemand=true]" ;;
+    spotfirst) vm_policy_command="[spotFirst=true]" ;;
+    *)
+        echo "Invalid VM Policy setting '$vm_policy'. Please use 'spotOnly', 'onDemand', or 'spotFirst'"
+        exit 1
+        ;;
+esac
 
 # Update security group and gateway if IP is 3.82.198.55
 if [[ "$OP_IP" = "3.82.198.55" ]]; then
@@ -112,15 +104,15 @@ if [[ "$OP_IP" = "3.82.198.55" ]]; then
     securityGroup="sg-00c7a6c97b097ec7b"
 fi
 
-# Helper function to find script dir - needed to find location of hostinit and job script
+# Helper function to find script directory
 function find_script_dir() {
     SOURCE=${BASH_SOURCE[0]}
-    while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
-        DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+    while [ -L "$SOURCE" ]; do
+        DIR=$(cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd)
         SOURCE=$(readlink "$SOURCE")
-        [[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+        [[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE
     done
-    DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+    DIR=$(cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd)
     echo $DIR
 }
 script_dir=$(find_script_dir)
@@ -129,7 +121,7 @@ script_dir=$(find_script_dir)
 echo "Logging in to $OP_IP"
 float login -a "$OP_IP" -u "$user" -p "$password"
 
-# Adjust float submit command to include job name if provided
+# Build the float submit command
 float_submit="float submit -a $OP_IP \
 -i $image -c $core -m $mem \
 --vmPolicy $vm_policy_command \
@@ -142,146 +134,107 @@ float_submit="float submit -a $OP_IP \
 $dataVolumeOption \
 --withRoot \
 --allowList [m*] \
--a $OP_IP -u $user -p $password \
 -e GRANT_SUDO=yes \
 --env JUPYTER_RUNTIME_DIR=/tmp/jupyter_runtime \
---env JUPYTER_ENABLE_LAB=TRUE \
-"
-# for package installation setup
+--env JUPYTER_ENABLE_LAB=TRUE"
+
+# Additional options for package installation
 if [[ $package_installation == "true" ]]; then
     float_submit+=" --env VMUI=$ide --dirMap /mnt/jfs:/mnt/jfs --hostInit $script_dir/host_init.sh -j $script_dir/bind_mount.sh --dataVolume [size=100]:/mnt/jfs_cache"
 fi
 
+# Include job name if provided
 if [[ -n "$job_name" ]]; then 
     float_submit+=" -n $job_name"
 fi
 
 echo -e "[Float submit command]: $float_submit"
 
+# Submit the job and retrieve job ID
 jobid=$(echo "yes" | $float_submit | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
-if [ ! -n "$jobid" ]; then
+if [[ -z "$jobid" ]]; then
     echo "Error returned from float submission command! Exiting..."
-    exit
+    exit 1
 fi
 echo "JOB ID: $jobid"
 
-# FOR PACKAGE INSTALLATION SETUP
-if [[ $package_installation == "true" ]]; then
-    # Grab session information based on ide
-    if [ "$ide" == "tmate" ]; then
-        # Waiting for the job initialization and extracting IP
-        echo "[$(date)]: Waiting to retrieve the public IP (~1min)..."
-        while true; do
-            IP_ADDRESS=$(float show -j "$jobid" | grep -A 1 portMappings | tail -n 1 | awk '{print $4}')
-            if [[ -n "IP_ADDRESS" ]]; then
-                echo "PUBLIC IP: $IP_ADDRESS"
-                break # break it when got IP
-            else
-                sleep 60 # check it every 60 secs
-                echo "[$(date)]: Still waiting to retrieve public ip..."
-            fi
-        done
-
-        # Waiting for the job to execute and get autosave log 
-        echo "[$(date)]: Waiting for the job to execute and retrieve tmate web session (~5min)..."
-        while true; do
-            url=$(float log -j "$jobid" cat stdout.autosave | grep "web session:" | head -n 1)
-            if [[ -n "$url" ]]; then
-                # Modify and output URL
-                tmate_session=$(echo "$url" | awk '{print $3}')
-                echo "To access the server, copy this URL in a browser: $tmate_session"
-                echo "To access the server, copy this URL in a browser: $tmate_session" > "${jobid}_tmate_session.log"
-
-                # tmate session line will always come with ssh session line
-                ssh=$(float log -j "$jobid" cat stdout.autosave | grep "ssh session:" | head -n 1)
-                ssh_tmate=$(echo "$ssh" | awk '{print $3,$4}')
-                echo "SSH session: $ssh_tmate"
-                echo "SSH session: $ssh_tmate" > "${jobid}_${ide}.log"
-                break
-            else
-                sleep 60 # check it every 60 secs
-                echo "[$(date)]: Still waiting for the job to execute..."
-            fi
-        done
-
-    elif [ "$ide" == "jupyter" ] || [ "$ide" == "jupyter-lab" ]; then
-        # Waiting for the job to execute and get autosave log 
-        echo "[$(date)]: Waiting for the job to execute and retrieve jupyter token (~10min)..."
-        while true; do
-            url=$(float log -j "$jobid" cat stderr.autosave | grep token= | head -n 1)
-            no_jupyter=$(float log -j "$jobid" cat stdout.autosave | grep "JupyterLab is not available." | head -n 1)
-
-            # If jupyter token and URL found
-            if [[ $url == *token* ]]; then
-                # Modify and output URL
-                IP_ADDRESS=$(float show -j "$jobid" | grep -A 1 portMappings | tail -n 1 | awk '{print $4}')
-                token=$(echo "$url" | sed -E 's|.*http://[^/]+/(lab\?token=[a-zA-Z0-9]+).*|\1|')
-                new_url="http://$IP_ADDRESS/$token"
-                echo "To access the server, copy this URL in a browser: $new_url"
-                echo "To access the server, copy this URL in a browser: $new_url" > "${jobid}_jupyter.log"
-                break # break it when got token
-            # If jupyter lab is not installed, do tmate section
-            elif [[ -n $no_jupyter ]]; then
-                echo "[$(date)]: WARNING: No JupyterLab installed under this user. Sharing tmate information:"
-                url=$(float log -j "$jobid" cat stdout.autosave | grep "web session:" | head -n 1)
-                tmate_session=$(echo "$url" | awk '{print $3}')
-                echo "To access the server, copy this URL in a browser: $tmate_session"
-                echo "To access the server, copy this URL in a browser: $tmate_session" > "${jobid}_tmate_session.log"
-
-                # tmate session line will always come with ssh session line
-                ssh=$(float log -j "$jobid" cat stdout.autosave | grep "ssh session:" | head -n 1)
-                ssh_tmate=$(echo "$ssh" | awk '{print $3,$4}')
-                echo "SSH session: $ssh_tmate"
-                echo "SSH session: $ssh_tmate" > "${jobid}_${ide}.log"
-                break
-            else
-                sleep 60 # check it every 60 secs
-                echo "[$(date)]: Still waiting for the job to generate token..."
-            fi
-        done
-    fi
-
-# Else for any other image, if there is a jupyter ide specified, do the jupyter output
-elif [ "$ide" == "jupyter" ] || [ "$ide" == "jupyter-lab" ]; then
-    # Waiting for the job to execute and get autosave log 
-    echo "[$(date)]: Waiting for the job to execute and retrieve jupyter token (~10min)..."
+# Helper functions
+function get_public_ip() {
+    local jobid="$1"
+    echo "[$(date)]: Waiting to retrieve the public IP (~1min)..."
     while true; do
-        url=$(float log -j "$jobid" cat stderr.autosave | grep token= | head -n 1)
-        no_jupyter=$(float log -j "$jobid" cat stdout.autosave | grep "JupyterLab is not available." | head -n 1)
+        IP_ADDRESS=$(float show -j "$jobid" | grep -A 1 portMappings | tail -n 1 | awk '{print $4}')
+        if [[ -n "$IP_ADDRESS" ]]; then
+            echo "PUBLIC IP: $IP_ADDRESS"
+            break
+        else
+            sleep 60
+            echo "[$(date)]: Still waiting to retrieve public IP..."
+        fi
+    done
+    echo "$IP_ADDRESS"
+}
 
-        # If jupyter token and URL found
-        if [[ $url == *token* ]]; then
-            # Modify and output URL
-            IP_ADDRESS=$(float show -j "$jobid" | grep -A 1 portMappings | tail -n 1 | awk '{print $4}')
-            token=$(echo "$url" | sed -E 's|.*http://[^/]+/(lab\?token=[a-zA-Z0-9]+).*|\1|')
-            new_url="http://$IP_ADDRESS/$token"
-            echo "To access the server, copy this URL in a browser: $new_url"
-            echo "To access the server, copy this URL in a browser: $new_url" > "${jobid}_jupyter.log"
-            break # break it when got token
-        # If jupyter lab is not installed, do tmate section
-        elif [[ -n $no_jupyter ]]; then
-            echo "[$(date)]: WARNING: No JupyterLab installed under this user. Sharing tmate information:"
-            url=$(float log -j "$jobid" cat stdout.autosave | grep "web session:" | head -n 1)
+function get_tmate_session() {
+    local jobid="$1"
+    echo "[$(date)]: Waiting for the job to execute and retrieve tmate web session (~5min)..."
+    while true; do
+        url=$(float log -j "$jobid" cat stdout.autosave | grep "web session:" | head -n 1)
+        if [[ -n "$url" ]]; then
             tmate_session=$(echo "$url" | awk '{print $3}')
             echo "To access the server, copy this URL in a browser: $tmate_session"
             echo "To access the server, copy this URL in a browser: $tmate_session" > "${jobid}_tmate_session.log"
 
-            # tmate session line will always come with ssh session line
             ssh=$(float log -j "$jobid" cat stdout.autosave | grep "ssh session:" | head -n 1)
             ssh_tmate=$(echo "$ssh" | awk '{print $3,$4}')
             echo "SSH session: $ssh_tmate"
-            echo "SSH session: $ssh_tmate" > "${jobid}_${ide}.log"
+            echo "SSH session: $ssh_tmate" >> "${jobid}_tmate_session.log"
             break
         else
-            sleep 60 # check it every 60 secs
+            sleep 60
+            echo "[$(date)]: Still waiting for the job to execute..."
+        fi
+    done
+}
+
+function get_jupyter_token() {
+    local jobid="$1"
+    local ip_address="$2"
+    echo "[$(date)]: Waiting for the job to execute and retrieve Jupyter token (~10min)..."
+    while true; do
+        url=$(float log -j "$jobid" cat stderr.autosave | grep token= | head -n 1)
+        no_jupyter=$(float log -j "$jobid" cat stdout.autosave | grep "JupyterLab is not available." | head -n 1)
+
+        if [[ $url == *token=* ]]; then
+            token=$(echo "$url" | sed -E 's|.*http://[^/]+/(lab\?token=[a-zA-Z0-9]+).*|\1|')
+            new_url="http://$ip_address/$token"
+            echo "To access the server, copy this URL in a browser: $new_url"
+            echo "To access the server, copy this URL in a browser: $new_url" > "${jobid}_jupyter.log"
+            break
+        elif [[ -n $no_jupyter ]]; then
+            echo "[$(date)]: WARNING: No JupyterLab installed. Falling back to tmate session."
+            get_tmate_session "$jobid"
+            break
+        else
+            sleep 60
             echo "[$(date)]: Still waiting for the job to generate token..."
         fi
     done
+}
+
+# Wait for the job to execute and retrieve connection info
+if [[ "$ide" == "tmate" ]]; then
+    IP_ADDRESS=$(get_public_ip "$jobid")
+    get_tmate_session "$jobid"
+elif [[ "$ide" == "jupyter" ]] || [[ "$ide" == "jupyter-lab" ]]; then
+    IP_ADDRESS=$(get_public_ip "$jobid")
+    get_jupyter_token "$jobid" "$IP_ADDRESS"
+else
+    echo "Unrecognized IDE specified: $ide"
 fi
 
-# Output suspend command for all IDEs
+# Output suspend command
 suspend_command="float suspend -j $jobid"
 echo "Suspend your environment when you do not need it by running:"
 echo "$suspend_command"
 echo "$suspend_command" >> "${jobid}_${ide}.log"
-
