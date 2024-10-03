@@ -88,6 +88,12 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
+# Update hard-coded security group and gateway if OpCenter is 3.82.198.55
+if [[ "${params[OP_IP]}" == "3.82.198.55" ]]; then
+    params[gateway]="g-4nntvdipikat0673xagju"
+    params[securityGroup]="sg-00c7a6c97b097ec7b"
+fi
+
 # Adjust publish port if not set by user and ide is rstudio
 if [[ "$publish_set" == false && "${params[ide]}" == "rstudio" ]]; then
     params[publish]="8787:8787"
@@ -122,12 +128,6 @@ case "$(echo "${params[vm_policy]}" | tr '[:upper:]' '[:lower:]')" in
         exit 1
         ;;
 esac
-
-# Update security group and gateway if IP is 3.82.198.55
-if [[ "${params[OP_IP]}" == "3.82.198.55" ]]; then
-    params[gateway]="g-4nntvdipikat0673xagju"
-    params[securityGroup]="sg-00c7a6c97b097ec7b"
-fi
 
 # Check if specified scripts exist
 check_script() {
