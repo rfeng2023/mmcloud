@@ -109,8 +109,8 @@ if [ ! -d "/mnt/jfs/$FLOAT_USER/.local" ]; then
     sudo chgrp -R users /mnt/jfs/$FLOAT_USER/.local
 fi
 
-if [ ! -d "/mnt/jfs/$FLOAT_USER/.mamba" ]; then
-    sudo mkdir -p /mnt/jfs/$FLOAT_USER/.mamba
+if [ ! -d "/mnt/jfs/$FLOAT_USER/.mamba/pkgs" ]; then
+    sudo mkdir -p /mnt/jfs/$FLOAT_USER/.mamba/pkgs
     sudo chown -R mmc /mnt/jfs/$FLOAT_USER/.mamba
     sudo chmod -R 777 /mnt/jfs/$FLOAT_USER/.mamba
     sudo chgrp -R users /mnt/jfs/$FLOAT_USER/.mamba
