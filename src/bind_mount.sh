@@ -12,7 +12,6 @@ ln -s /mnt/jfs/$FLOAT_USER/.conda /home/$username/.conda
 ln -s /mnt/jfs/$FLOAT_USER/.condarc /home/$username/.condarc
 ln -s /mnt/jfs/$FLOAT_USER/.ipython /home/$username/.ipython
 ln -s /mnt/jfs/$FLOAT_USER/.jupyter /home/$username/.jupyter
-ln -s /mnt/jfs/$FLOAT_USER/.local /home/$username/.local
 ln -s /mnt/jfs/$FLOAT_USER/.mamba /home/$username/.mamba
 ln -s /mnt/jfs/$FLOAT_USER/.local /home/$username/.local
 
