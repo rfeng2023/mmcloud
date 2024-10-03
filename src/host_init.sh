@@ -116,13 +116,6 @@ if [ ! -d "/mnt/jfs/$FLOAT_USER/.mamba/pkgs" ]; then
     sudo chgrp -R users /mnt/jfs/$FLOAT_USER/.mamba
 fi
 
-if [ ! -d "/mnt/jfs/$FLOAT_USER/.local" ]; then
-    sudo mkdir -p /mnt/jfs/$FLOAT_USER/.local
-    sudo chown -R mmc /mnt/jfs/$FLOAT_USER/.local
-    sudo chmod -R 777 /mnt/jfs/$FLOAT_USER/.local
-    sudo chgrp -R users /mnt/jfs/$FLOAT_USER/.local
-fi
-
 # For bashrc and profile, if they do exist, make sure they have the right permissions
 # for this setup
 if [ -d "/mnt/jfs/$FLOAT_USER/.bashrc" ]; then
