@@ -170,8 +170,7 @@ if [[ "$mount_packages" == "true" ]]; then
     float_submit_args+=(
         "-j" "$script_dir/bind_mount.sh"
         "--hostInit" "$script_dir/host_init.sh"
-        "--dirMap" "/mnt/jfs:/mnt/jfs"
-        "--dataVolume" "[size=100]:/mnt/jfs_cache"
+        "--dirMap" "/mnt/efs:/mnt/efs"
     )
 fi
 
@@ -188,23 +187,22 @@ if [[ -z "$jobid" ]]; then
     echo "Error returned from float submission command! Exiting..."
     exit 1
 fi
+echo ""
 echo "JOB ID: $jobid"
 
 # Helper functions
+# No other echo needed as just getting IP_ADDRESS
 get_public_ip() {
     local jobid="$1"
-    echo "[$(date)]: Waiting to retrieve the public IP (~1min)..."
     local IP_ADDRESS=""
     while [[ -z "$IP_ADDRESS" ]]; do
         IP_ADDRESS=$("$float_executable" show -j "$jobid" | grep -A 1 portMappings | tail -n 1 | awk '{print $4}' || true)
         if [[ -n "$IP_ADDRESS" ]]; then
-            echo "PUBLIC IP: $IP_ADDRESS"
+            echo "$IP_ADDRESS"
         else
-            sleep 60
-            echo "[$(date)]: Still waiting to retrieve public IP..."
+            sleep 1s
         fi
     done
-    echo "$IP_ADDRESS"
 }
 
 get_tmate_session() {
@@ -266,8 +264,9 @@ case "$ide" in
         ;;
     rstudio)
         IP_ADDRESS=$(get_public_ip "$jobid")
-        echo "To access RStudio Server, navigate to http://$IP_ADDRESS:8787 in your web browser."
-        echo "RStudio Server URL: http://$IP_ADDRESS:8787" > "${jobid}_rstudio.log"
+        echo "To access RStudio Server, navigate to http://$IP_ADDRESS in your web browser."
+        echo "Please give the instance about 5 minutes to start RStudio"
+        echo "RStudio Server URL: http://$IP_ADDRESS" > "${jobid}_rstudio.log"
         ;;
     *)
         echo "Unrecognized IDE specified: $ide"
