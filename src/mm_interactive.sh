@@ -19,7 +19,8 @@ declare -A defaults=(
     [image_vol_size]=60
     [root_vol_size]=70
     [ide]="tmate"
-    [package_installation]="false"
+    [host_init]=""
+    [mount_init]=""
 )
 
 # Initialize variables
@@ -58,7 +59,8 @@ usage() {
     echo "  --no-interactive-mount           Disable interactive mount"
     echo "  --no-mount                       Disable all mounting"
     echo "  -jn, --job_name <name>           Set the job name"
-    echo "  --package-installation           Enable package installation"
+    echo "  --host-init <script>             Set the host initialization script"
+    echo "  --mount-init <script>            Set the mount initialization script"
     echo "  -h, --help                       Display this help message"
 }
 
@@ -84,7 +86,8 @@ while [[ "$#" -gt 0 ]]; do
         --no-interactive-mount) no_interactive_mount=true ;;
         --no-mount) no_mount=true ;;
         -jn|--job_name) job_name="$2"; shift ;;
-        --package-installation) params[package_installation]=true ;;
+        --host-init) params[host_init]="$2"; shift ;;
+        --mount-init) params[mount_init]="$2"; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown parameter passed: $1"; usage; exit 1 ;;
     esac
@@ -132,18 +135,18 @@ if [[ "${params[OP_IP]}" == "3.82.198.55" ]]; then
     params[securityGroup]="sg-00c7a6c97b097ec7b"
 fi
 
-# Helper function to find script directory
-find_script_dir() {
-    local SOURCE=${BASH_SOURCE[0]}
-    while [ -L "$SOURCE" ]; do
-        local DIR=$(cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd)
-        SOURCE=$(readlink "$SOURCE")
-        [[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE
-    done
-    local DIR=$(cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd)
-    echo $DIR
+# Check if specified scripts exist
+check_script() {
+    local script_path="$1"
+    local script_type="$2"
+    if [[ -n "$script_path" && ! -f "$script_path" ]]; then
+        echo "Error: $script_type script '$script_path' does not exist."
+        exit 1
+    fi
 }
-script_dir=$(find_script_dir)
+
+check_script "${params[host_init]}" "Host initialization"
+check_script "${params[mount_init]}" "Mount initialization"
 
 # Log in
 echo "Logging in to ${params[OP_IP]}"
@@ -164,17 +167,15 @@ $dataVolumeOption \
 --allowList [m*] \
 -e GRANT_SUDO=yes \
 --env JUPYTER_RUNTIME_DIR=/tmp/jupyter_runtime \
---env JUPYTER_ENABLE_LAB=TRUE"
+--env JUPYTER_ENABLE_LAB=TRUE \
+--env VMUI=${params[ide]}"
 
-# Additional options for package installation
-if [[ ${params[package_installation]} == "true" ]]; then
-    float_submit+=" --env VMUI=${params[ide]} --dirMap /mnt/jfs:/mnt/jfs --hostInit $script_dir/host_init.sh -j $script_dir/bind_mount.sh --dataVolume [size=100]:/mnt/jfs_cache"
-fi
+# Add host-init and mount-init if specified
+[[ -n "${params[host_init]}" ]] && float_submit+=" --hostInit ${params[host_init]}"
+[[ -n "${params[mount_init]}" ]] && float_submit+=" -j ${params[mount_init]} --dataVolume [size=100]:/mnt/jfs_cache"
 
 # Include job name if provided
-if [[ -n "$job_name" ]]; then 
-    float_submit+=" -n $job_name"
-fi
+[[ -n "$job_name" ]] && float_submit+=" -n $job_name"
 
 echo -e "[Float submit command]: $float_submit"
 
