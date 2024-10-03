@@ -30,9 +30,9 @@ case "${VMUI}" in
     fi
     ;;
   rstudio)
-    if is_available rstudio; then
+    if is_available rserver; then
       echo "RStudio is available. Starting RStudio ..."
-      rstudio
+      rserver --config-file=${HOME}/.pixi/envs/rstudio/etc/rstudio/rserver.conf
     else
       echo "RStudio is not available."
       start_terminal_server
