@@ -14,7 +14,6 @@ declare -A defaults=(
     [publish]="8888:8888"
     [securityGroup]="sg-02867677e76635b25"
     [gateway]="g-9xahbrb5rkbs0ic8yzylk"
-    [include_dataVolume]="yes"
     [vm_policy]="onDemand"
     [image_vol_size]=60
     [root_vol_size]=70
@@ -33,7 +32,6 @@ for key in "${!defaults[@]}"; do
     params[$key]="${defaults[$key]}"
 done
 additional_mounts=()
-no_interactive_mount=false
 publish_set=false
 
 # Function to display usage information
@@ -44,19 +42,17 @@ usage() {
     echo "  -u, --user <username>            Set the username"
     echo "  -p, --password <password>        Set the password"
     echo "  -s3, --s3_path <path>            Set the S3 path"
-    echo "  -vm, --VM_path <path>            Set the VM path"
+    echo "  --VM_path <path>                 Set the VM path"
     echo "  -i, --image <image>              Set the Docker image"
     echo "  -c, --core <cores>               Set the number of cores"
     echo "  -m, --mem <memory>               Set the memory size"
     echo "  -pub, --publish <ports>          Set the port publishing"
     echo "  -sg, --securityGroup <group>     Set the security group"
-    echo "  -dv, --dataVolume <yes/no>       Include data volume"
-    echo "  -vm, --vmPolicy <policy>         Set the VM policy"
+    echo "  -vp, --vmPolicy <policy>         Set the VM policy"
     echo "  -ivs, --imageVolSize <size>      Set the image volume size"
     echo "  -rvs, --rootVolSize <size>       Set the root volume size"
     echo "  -ide, --interactive_develop_env <env> Set the IDE"
     echo "  -am, --additional_mounts <mount> Add additional mounts"
-    echo "  --no-interactive-mount           Disable interactive mount"
     echo "  --no-mount                       Disable all mounting"
     echo "  -jn, --job_name <name>           Set the job name"
     echo "  --host-init <script>             Set the host initialization script"
@@ -71,19 +67,17 @@ while [[ "$#" -gt 0 ]]; do
         -u|--user) user="$2"; shift ;;
         -p|--password) password="$2"; shift ;;
         -s3|--s3_path) params[s3_path]="$2"; shift ;;
-        -vm|--VM_path) params[VM_path]="$2"; shift ;;
+        --VM_path) params[VM_path]="$2"; shift ;;
         -i|--image) params[image]="$2"; shift ;;
         -c|--core) params[core]="$2"; shift ;;
         -m|--mem) params[mem]="$2"; shift ;;
         -pub|--publish) params[publish]="$2"; publish_set=true; shift ;;
         -sg|--securityGroup) params[securityGroup]="$2"; shift ;;
-        -dv|--dataVolume) params[include_dataVolume]="$2"; shift ;;
-        -vm|--vmPolicy) params[vm_policy]="$2"; shift ;;
+        -vp|--vmPolicy) params[vm_policy]="$2"; shift ;;
         -ivs|--imageVolSize) params[image_vol_size]="$2"; shift ;;
         -rvs|--rootVolSize) params[root_vol_size]="$2"; shift ;;
         -ide|--interactive_develop_env) params[ide]="$2"; shift ;;
         -am|--additional_mounts) additional_mounts+=("$2"); shift ;;
-        --no-interactive-mount) no_interactive_mount=true ;;
         --no-mount) no_mount=true ;;
         -jn|--job_name) job_name="$2"; shift ;;
         --host-init) params[host_init]="$2"; shift ;;
@@ -109,17 +103,17 @@ if [[ -z "$password" ]]; then
 fi
 
 # Data volume handling
-dataVolumeOption=""
-if [[ $no_mount == false && ${params[include_dataVolume]} == "yes" ]]; then
-    dataVolumeOption="--dataVolume [mode=rw,endpoint=s3.us-east-1.amazonaws.com]${params[s3_path]}:${params[VM_path]}"
+if [[ $no_mount == false ]]; then
+    dataVolumeOption=("--dataVolume" "[mode=rw,endpoint=s3.us-east-1.amazonaws.com]${params[s3_path]}:${params[VM_path]}")
     for mount in "${additional_mounts[@]}"; do
-        dataVolumeOption+=" --dataVolume [mode=rw,endpoint=s3.us-east-1.amazonaws.com]${mount}"
+        dataVolumeOption+=("--dataVolume" "[mode=rw,endpoint=s3.us-east-1.amazonaws.com]${mount}")
     done
+else
+    dataVolumeOption=()
 fi
 
 # Determine VM Policy
-lowercase_vm_policy=$(echo "${params[vm_policy]}" | tr '[:upper:]' '[:lower:]')
-case "$lowercase_vm_policy" in
+case "$(echo "${params[vm_policy]}" | tr '[:upper:]' '[:lower:]')" in
     spotonly) vm_policy_command="[spotOnly=true]" ;;
     ondemand) vm_policy_command="[onDemand=true]" ;;
     spotfirst) vm_policy_command="[spotFirst=true]" ;;
@@ -152,35 +146,45 @@ check_script "${params[mount_init]}" "Mount initialization"
 echo "Logging in to ${params[OP_IP]}"
 float login -a "${params[OP_IP]}" -u "$user" -p "$password"
 
-# Build the float submit command
-float_submit="float submit -a ${params[OP_IP]} \
--i ${params[image]} -c ${params[core]} -m ${params[mem]} \
---vmPolicy $vm_policy_command \
---imageVolSize ${params[image_vol_size]} \
---rootVolSize ${params[root_vol_size]} \
---gateway ${params[gateway]} \
---migratePolicy [disable=true,evadeOOM=false] \
---publish ${params[publish]} \
---securityGroup ${params[securityGroup]} \
-$dataVolumeOption \
---withRoot \
---allowList [m*] \
--e GRANT_SUDO=yes \
---env JUPYTER_RUNTIME_DIR=/tmp/jupyter_runtime \
---env JUPYTER_ENABLE_LAB=TRUE \
---env VMUI=${params[ide]}"
+# Build the float submit command as an array
+float_submit_args=(
+    "float" "submit" "-a" "${params[OP_IP]}"
+    "-i" "${params[image]}" "-c" "${params[core]}" "-m" "${params[mem]}"
+    "--vmPolicy" "$vm_policy_command"
+    "--imageVolSize" "${params[image_vol_size]}"
+    "--rootVolSize" "${params[root_vol_size]}"
+    "--gateway" "${params[gateway]}"
+    "--migratePolicy" "[disable=true,evadeOOM=false]"
+    "--publish" "${params[publish]}"
+    "--securityGroup" "${params[securityGroup]}"
+    "--withRoot"
+    "--allowList" "[m*]"
+    "-e" "GRANT_SUDO=yes"
+    "--env" "JUPYTER_RUNTIME_DIR=/tmp/jupyter_runtime"
+    "--env" "JUPYTER_ENABLE_LAB=TRUE"
+    "--env" "VMUI=${params[ide]}"
+    "${dataVolumeOption[@]}"
+)
 
 # Add host-init and mount-init if specified
-[[ -n "${params[host_init]}" ]] && float_submit+=" --hostInit ${params[host_init]}"
-[[ -n "${params[mount_init]}" ]] && float_submit+=" -j ${params[mount_init]} --dirMap /mnt/jfs:/mnt/jfs --dataVolume [size=100]:/mnt/jfs_cache"
+[[ -n "${params[host_init]}" ]] && float_submit_args+=("--hostInit" "${params[host_init]}")
+if [[ -n "${params[mount_init]}" ]]; then
+    float_submit_args+=(
+        "-j" "${params[mount_init]}"
+        "--dirMap" "/mnt/jfs:/mnt/jfs"
+        "--dataVolume" "[size=100]:/mnt/jfs_cache"
+    )
+fi
 
 # Include job name if provided
-[[ -n "$job_name" ]] && float_submit+=" -n $job_name"
+[[ -n "$job_name" ]] && float_submit_args+=("-n" "$job_name")
 
-echo -e "[Float submit command]: $float_submit"
+# Display the float submit command
+echo -e "[Float submit command]: ${float_submit_args[*]}"
 
 # Submit the job and retrieve job ID
-jobid=$(echo "yes" | $float_submit | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
+float_submit_output=$(echo "yes" | "${float_submit_args[@]}")
+jobid=$(echo "$float_submit_output" | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
 if [[ -z "$jobid" ]]; then
     echo "Error returned from float submission command! Exiting..."
     exit 1
@@ -207,8 +211,7 @@ get_public_ip() {
 get_tmate_session() {
     local jobid="$1"
     echo "[$(date)]: Waiting for the job to execute and retrieve tmate web session (~5min)..."
-    local url=""
-    while [[ -z "$url" ]]; do
+    while true; do
         url=$(float log -j "$jobid" cat stdout.autosave | grep "web session:" | head -n 1)
         if [[ -n "$url" ]]; then
             local tmate_session=$(echo "$url" | awk '{print $3}')
@@ -219,6 +222,7 @@ get_tmate_session() {
             local ssh_tmate=$(echo "$ssh" | awk '{print $3,$4}')
             echo "SSH session: $ssh_tmate"
             echo "SSH session: $ssh_tmate" >> "${jobid}_tmate_session.log"
+            break
         else
             sleep 60
             echo "[$(date)]: Still waiting for the job to execute..."
@@ -230,8 +234,6 @@ get_jupyter_token() {
     local jobid="$1"
     local ip_address="$2"
     echo "[$(date)]: Waiting for the job to execute and retrieve Jupyter token (~10min)..."
-    local url=""
-    local no_jupyter=""
     while true; do
         url=$(float log -j "$jobid" cat stderr.autosave | grep token= | head -n 1)
         no_jupyter=$(float log -j "$jobid" cat stdout.autosave | grep "JupyterLab is not available." | head -n 1)
