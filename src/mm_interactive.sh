@@ -1,136 +1,164 @@
 #!/bin/bash
 
+# Set strict mode
+set -euo pipefail
+
 # Default values for parameters
-default_OP_IP="44.222.241.133"
-default_s3_path="s3://statfungen/ftp_fgc_xqtl"
-default_VM_path="/data/"
-default_image="docker.io/peterz27/sos-jupyter"
-default_core=4
-default_mem=16
-default_publish="8888:8888"
-default_securityGroup="sg-02867677e76635b25"
-default_gateway="g-9xahbrb5rkbs0ic8yzylk"
-default_include_dataVolume="yes"
-default_vm_policy="onDemand"
-default_image_vol_size=60
-default_root_vol_size=70
-default_ide="tmate"
-default_package_installation="false"
+declare -A defaults=(
+    [OP_IP]="44.222.241.133"
+    [s3_path]="s3://statfungen/ftp_fgc_xqtl"
+    [VM_path]="/data/"
+    [image]="quay.io/danielnachun/tmate-minimal"
+    [core]=4
+    [mem]=16
+    [publish]="8888:8888"
+    [securityGroup]="sg-02867677e76635b25"
+    [gateway]="g-9xahbrb5rkbs0ic8yzylk"
+    [include_dataVolume]="yes"
+    [vm_policy]="onDemand"
+    [image_vol_size]=60
+    [root_vol_size]=70
+    [ide]="tmate"
+    [package_installation]="false"
+)
 
 # Initialize variables
 user=""
 password=""
 job_name=""
 no_mount=false
-OP_IP="$default_OP_IP"
-s3_path="$default_s3_path"
-VM_path="$default_VM_path"
-image="$default_image"
-core="$default_core"
-mem="$default_mem"
-publish="$default_publish"
-securityGroup="$default_securityGroup"
-gateway="$default_gateway"
-include_dataVolume="$default_include_dataVolume"
-vm_policy="$default_vm_policy"
-image_vol_size="$default_image_vol_size"
-root_vol_size="$default_root_vol_size"
-ide="$default_ide"
+declare -A params
+for key in "${!defaults[@]}"; do
+    params[$key]="${defaults[$key]}"
+done
 additional_mounts=()
 no_interactive_mount=false
-package_installation="$default_package_installation"
+publish_set=false
+
+# Function to display usage information
+usage() {
+    echo "Usage: $0 [options]"
+    echo "Options:"
+    echo "  -o, --OP_IP <ip>                 Set the OP IP address"
+    echo "  -u, --user <username>            Set the username"
+    echo "  -p, --password <password>        Set the password"
+    echo "  -s3, --s3_path <path>            Set the S3 path"
+    echo "  -vm, --VM_path <path>            Set the VM path"
+    echo "  -i, --image <image>              Set the Docker image"
+    echo "  -c, --core <cores>               Set the number of cores"
+    echo "  -m, --mem <memory>               Set the memory size"
+    echo "  -pub, --publish <ports>          Set the port publishing"
+    echo "  -sg, --securityGroup <group>     Set the security group"
+    echo "  -dv, --dataVolume <yes/no>       Include data volume"
+    echo "  -vm, --vmPolicy <policy>         Set the VM policy"
+    echo "  -ivs, --imageVolSize <size>      Set the image volume size"
+    echo "  -rvs, --rootVolSize <size>       Set the root volume size"
+    echo "  -ide, --interactive_develop_env <env> Set the IDE"
+    echo "  -am, --additional_mounts <mount> Add additional mounts"
+    echo "  --no-interactive-mount           Disable interactive mount"
+    echo "  --no-mount                       Disable all mounting"
+    echo "  -jn, --job_name <name>           Set the job name"
+    echo "  --package-installation           Enable package installation"
+    echo "  -h, --help                       Display this help message"
+}
 
 # Parse command line options
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        -o|--OP_IP) OP_IP="$2"; shift ;;
+        -o|--OP_IP) params[OP_IP]="$2"; shift ;;
         -u|--user) user="$2"; shift ;;
         -p|--password) password="$2"; shift ;;
-        -s3|--s3_path) s3_path="$2"; shift ;;
-        -vm|--VM_path) VM_path="$2"; shift ;;
-        -i|--image) image="$2"; shift ;;
-        -c|--core) core="$2"; shift ;;
-        -m|--mem) mem="$2"; shift ;;
-        -pub|--publish) publish="$2"; shift ;;
-        -sg|--securityGroup) securityGroup="$2"; shift ;;
-        -dv|--dataVolume) include_dataVolume="$2"; shift ;;
-        -vm|--vmPolicy) vm_policy="$2"; shift ;;
-        -ivs|--imageVolSize) image_vol_size="$2"; shift ;;
-        -rvs|--rootVolSize) root_vol_size="$2"; shift ;;
-        -ide|--interactive_develop_env) ide="$2"; shift ;;
+        -s3|--s3_path) params[s3_path]="$2"; shift ;;
+        -vm|--VM_path) params[VM_path]="$2"; shift ;;
+        -i|--image) params[image]="$2"; shift ;;
+        -c|--core) params[core]="$2"; shift ;;
+        -m|--mem) params[mem]="$2"; shift ;;
+        -pub|--publish) params[publish]="$2"; publish_set=true; shift ;;
+        -sg|--securityGroup) params[securityGroup]="$2"; shift ;;
+        -dv|--dataVolume) params[include_dataVolume]="$2"; shift ;;
+        -vm|--vmPolicy) params[vm_policy]="$2"; shift ;;
+        -ivs|--imageVolSize) params[image_vol_size]="$2"; shift ;;
+        -rvs|--rootVolSize) params[root_vol_size]="$2"; shift ;;
+        -ide|--interactive_develop_env) params[ide]="$2"; shift ;;
         -am|--additional_mounts) additional_mounts+=("$2"); shift ;;
-        --no-interactive-mount) no_interactive_mount=true; ;;
-        --no-mount) no_mount=true; ;;
+        --no-interactive-mount) no_interactive_mount=true ;;
+        --no-mount) no_mount=true ;;
         -jn|--job_name) job_name="$2"; shift ;;
-        --package-installation) package_installation=true; ;;
-        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+        --package-installation) params[package_installation]=true ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "Unknown parameter passed: $1"; usage; exit 1 ;;
     esac
     shift
 done
 
+# Adjust publish port if not set by user and ide is rstudio
+if [[ "$publish_set" == false && "${params[ide]}" == "rstudio" ]]; then
+    params[publish]="8787:8787"
+fi
+
 # Prompt for user and password if not provided
 if [[ -z "$user" ]]; then
-    read -p "Enter user for $OP_IP: " user
+    read -p "Enter user for ${params[OP_IP]}: " user
 fi
 if [[ -z "$password" ]]; then
-    read -sp "Enter password for $OP_IP: " password
+    read -sp "Enter password for ${params[OP_IP]}: " password
     echo ""
 fi
 
 # Data volume handling
 dataVolumeOption=""
-if [[ $no_mount == false && $include_dataVolume == "yes" ]]; then
-    dataVolumeOption="--dataVolume [mode=rw,endpoint=s3.us-east-1.amazonaws.com]${s3_path}:${VM_path}"
+if [[ $no_mount == false && ${params[include_dataVolume]} == "yes" ]]; then
+    dataVolumeOption="--dataVolume [mode=rw,endpoint=s3.us-east-1.amazonaws.com]${params[s3_path]}:${params[VM_path]}"
     for mount in "${additional_mounts[@]}"; do
         dataVolumeOption+=" --dataVolume [mode=rw,endpoint=s3.us-east-1.amazonaws.com]${mount}"
     done
 fi
 
 # Determine VM Policy
-lowercase_vm_policy=$(echo "$vm_policy" | tr '[:upper:]' '[:lower:]')
+lowercase_vm_policy=$(echo "${params[vm_policy]}" | tr '[:upper:]' '[:lower:]')
 case "$lowercase_vm_policy" in
     spotonly) vm_policy_command="[spotOnly=true]" ;;
     ondemand) vm_policy_command="[onDemand=true]" ;;
     spotfirst) vm_policy_command="[spotFirst=true]" ;;
     *)
-        echo "Invalid VM Policy setting '$vm_policy'. Please use 'spotOnly', 'onDemand', or 'spotFirst'"
+        echo "Invalid VM Policy setting '${params[vm_policy]}'. Please use 'spotOnly', 'onDemand', or 'spotFirst'"
         exit 1
         ;;
 esac
 
 # Update security group and gateway if IP is 3.82.198.55
-if [[ "$OP_IP" = "3.82.198.55" ]]; then
-    gateway="g-4nntvdipikat0673xagju"
-    securityGroup="sg-00c7a6c97b097ec7b"
+if [[ "${params[OP_IP]}" == "3.82.198.55" ]]; then
+    params[gateway]="g-4nntvdipikat0673xagju"
+    params[securityGroup]="sg-00c7a6c97b097ec7b"
 fi
 
 # Helper function to find script directory
-function find_script_dir() {
-    SOURCE=${BASH_SOURCE[0]}
+find_script_dir() {
+    local SOURCE=${BASH_SOURCE[0]}
     while [ -L "$SOURCE" ]; do
-        DIR=$(cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd)
+        local DIR=$(cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd)
         SOURCE=$(readlink "$SOURCE")
         [[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE
     done
-    DIR=$(cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd)
+    local DIR=$(cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd)
     echo $DIR
 }
 script_dir=$(find_script_dir)
 
 # Log in
-echo "Logging in to $OP_IP"
-float login -a "$OP_IP" -u "$user" -p "$password"
+echo "Logging in to ${params[OP_IP]}"
+float login -a "${params[OP_IP]}" -u "$user" -p "$password"
 
 # Build the float submit command
-float_submit="float submit -a $OP_IP \
--i $image -c $core -m $mem \
+float_submit="float submit -a ${params[OP_IP]} \
+-i ${params[image]} -c ${params[core]} -m ${params[mem]} \
 --vmPolicy $vm_policy_command \
---imageVolSize $image_vol_size \
---rootVolSize $root_vol_size \
---gateway $gateway \
+--imageVolSize ${params[image_vol_size]} \
+--rootVolSize ${params[root_vol_size]} \
+--gateway ${params[gateway]} \
 --migratePolicy [disable=true,evadeOOM=false] \
---publish $publish \
---securityGroup $securityGroup \
+--publish ${params[publish]} \
+--securityGroup ${params[securityGroup]} \
 $dataVolumeOption \
 --withRoot \
 --allowList [m*] \
@@ -139,8 +167,8 @@ $dataVolumeOption \
 --env JUPYTER_ENABLE_LAB=TRUE"
 
 # Additional options for package installation
-if [[ $package_installation == "true" ]]; then
-    float_submit+=" --env VMUI=$ide --dirMap /mnt/jfs:/mnt/jfs --hostInit $script_dir/host_init.sh -j $script_dir/bind_mount.sh --dataVolume [size=100]:/mnt/jfs_cache"
+if [[ ${params[package_installation]} == "true" ]]; then
+    float_submit+=" --env VMUI=${params[ide]} --dirMap /mnt/jfs:/mnt/jfs --hostInit $script_dir/host_init.sh -j $script_dir/bind_mount.sh --dataVolume [size=100]:/mnt/jfs_cache"
 fi
 
 # Include job name if provided
@@ -159,14 +187,14 @@ fi
 echo "JOB ID: $jobid"
 
 # Helper functions
-function get_public_ip() {
+get_public_ip() {
     local jobid="$1"
     echo "[$(date)]: Waiting to retrieve the public IP (~1min)..."
-    while true; do
+    local IP_ADDRESS=""
+    while [[ -z "$IP_ADDRESS" ]]; do
         IP_ADDRESS=$(float show -j "$jobid" | grep -A 1 portMappings | tail -n 1 | awk '{print $4}')
         if [[ -n "$IP_ADDRESS" ]]; then
             echo "PUBLIC IP: $IP_ADDRESS"
-            break
         else
             sleep 60
             echo "[$(date)]: Still waiting to retrieve public IP..."
@@ -175,21 +203,21 @@ function get_public_ip() {
     echo "$IP_ADDRESS"
 }
 
-function get_tmate_session() {
+get_tmate_session() {
     local jobid="$1"
     echo "[$(date)]: Waiting for the job to execute and retrieve tmate web session (~5min)..."
-    while true; do
+    local url=""
+    while [[ -z "$url" ]]; do
         url=$(float log -j "$jobid" cat stdout.autosave | grep "web session:" | head -n 1)
         if [[ -n "$url" ]]; then
-            tmate_session=$(echo "$url" | awk '{print $3}')
+            local tmate_session=$(echo "$url" | awk '{print $3}')
             echo "To access the server, copy this URL in a browser: $tmate_session"
             echo "To access the server, copy this URL in a browser: $tmate_session" > "${jobid}_tmate_session.log"
 
-            ssh=$(float log -j "$jobid" cat stdout.autosave | grep "ssh session:" | head -n 1)
-            ssh_tmate=$(echo "$ssh" | awk '{print $3,$4}')
+            local ssh=$(float log -j "$jobid" cat stdout.autosave | grep "ssh session:" | head -n 1)
+            local ssh_tmate=$(echo "$ssh" | awk '{print $3,$4}')
             echo "SSH session: $ssh_tmate"
             echo "SSH session: $ssh_tmate" >> "${jobid}_tmate_session.log"
-            break
         else
             sleep 60
             echo "[$(date)]: Still waiting for the job to execute..."
@@ -197,17 +225,19 @@ function get_tmate_session() {
     done
 }
 
-function get_jupyter_token() {
+get_jupyter_token() {
     local jobid="$1"
     local ip_address="$2"
     echo "[$(date)]: Waiting for the job to execute and retrieve Jupyter token (~10min)..."
+    local url=""
+    local no_jupyter=""
     while true; do
         url=$(float log -j "$jobid" cat stderr.autosave | grep token= | head -n 1)
         no_jupyter=$(float log -j "$jobid" cat stdout.autosave | grep "JupyterLab is not available." | head -n 1)
 
         if [[ $url == *token=* ]]; then
-            token=$(echo "$url" | sed -E 's|.*http://[^/]+/(lab\?token=[a-zA-Z0-9]+).*|\1|')
-            new_url="http://$ip_address/$token"
+            local token=$(echo "$url" | sed -E 's|.*http://[^/]+/(lab\?token=[a-zA-Z0-9]+).*|\1|')
+            local new_url="http://$ip_address/$token"
             echo "To access the server, copy this URL in a browser: $new_url"
             echo "To access the server, copy this URL in a browser: $new_url" > "${jobid}_jupyter.log"
             break
@@ -223,18 +253,27 @@ function get_jupyter_token() {
 }
 
 # Wait for the job to execute and retrieve connection info
-if [[ "$ide" == "tmate" ]]; then
-    IP_ADDRESS=$(get_public_ip "$jobid")
-    get_tmate_session "$jobid"
-elif [[ "$ide" == "jupyter" ]] || [[ "$ide" == "jupyter-lab" ]]; then
-    IP_ADDRESS=$(get_public_ip "$jobid")
-    get_jupyter_token "$jobid" "$IP_ADDRESS"
-else
-    echo "Unrecognized IDE specified: $ide"
-fi
+case "${params[ide]}" in
+    tmate)
+        IP_ADDRESS=$(get_public_ip "$jobid")
+        get_tmate_session "$jobid"
+        ;;
+    jupyter|jupyter-lab)
+        IP_ADDRESS=$(get_public_ip "$jobid")
+        get_jupyter_token "$jobid" "$IP_ADDRESS"
+        ;;
+    rstudio)
+        IP_ADDRESS=$(get_public_ip "$jobid")
+        echo "To access RStudio Server, navigate to http://$IP_ADDRESS:8787 in your web browser."
+        echo "RStudio Server URL: http://$IP_ADDRESS:8787" > "${jobid}_rstudio.log"
+        ;;
+    *)
+        echo "Unrecognized IDE specified: ${params[ide]}"
+        ;;
+esac
 
 # Output suspend command
 suspend_command="float suspend -j $jobid"
 echo "Suspend your environment when you do not need it by running:"
 echo "$suspend_command"
-echo "$suspend_command" >> "${jobid}_${ide}.log"
+echo "$suspend_command" >> "${jobid}_${params[ide]}.log"
