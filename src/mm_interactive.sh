@@ -172,7 +172,7 @@ $dataVolumeOption \
 
 # Add host-init and mount-init if specified
 [[ -n "${params[host_init]}" ]] && float_submit+=" --hostInit ${params[host_init]}"
-[[ -n "${params[mount_init]}" ]] && float_submit+=" -j ${params[mount_init]} --dataVolume [size=100]:/mnt/jfs_cache"
+[[ -n "${params[mount_init]}" ]] && float_submit+=" -j ${params[mount_init]} --dirMap /mnt/jfs:/mnt/jfs --dataVolume [size=100]:/mnt/jfs_cache"
 
 # Include job name if provided
 [[ -n "$job_name" ]] && float_submit+=" -n $job_name"
