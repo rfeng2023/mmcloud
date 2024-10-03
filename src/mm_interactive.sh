@@ -15,6 +15,7 @@ default_vm_policy="onDemand"
 default_image_vol_size=60
 default_root_vol_size=70
 default_ide="tmate"
+default_package_installation="false"
 
 # Initialize variables to empty for user and password
 user=""
@@ -41,6 +42,7 @@ root_vol_size="$default_root_vol_size"
 ide="$default_ide"
 additional_mounts=()
 no_interactive_mount=false
+package_installation="$default_package_installation"
 
 # Parse command line options
 while [[ "$#" -gt 0 ]]; do
@@ -64,6 +66,7 @@ while [[ "$#" -gt 0 ]]; do
         --no-interactive-mount) no_interactive_mount=true; ;;
         --no-mount) no_mount=true; ;; # <- Added
         -jn|--job_name) job_name="$2"; shift ;; # <- Added
+        --package-installation) package_installation=true; ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
@@ -145,7 +148,7 @@ $dataVolumeOption \
 --env JUPYTER_ENABLE_LAB=TRUE \
 "
 # for package installation setup
-if [[ $image == *"pixi-jovyan"* ]]; then
+if [[ $package_installation == "true" ]]; then
     float_submit+=" --env VMUI=$ide --dirMap /mnt/jfs:/mnt/jfs --hostInit $script_dir/host_init.sh -j $script_dir/bind_mount.sh --dataVolume [size=100]:/mnt/jfs_cache"
 fi
 
@@ -154,6 +157,7 @@ if [[ -n "$job_name" ]]; then
 fi
 
 echo -e "[Float submit command]: $float_submit"
+
 jobid=$(echo "yes" | $float_submit | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
 if [ ! -n "$jobid" ]; then
     echo "Error returned from float submission command! Exiting..."
@@ -162,7 +166,7 @@ fi
 echo "JOB ID: $jobid"
 
 # FOR PACKAGE INSTALLATION SETUP
-if [[ $image == *"pixi-jovyan"* ]]; then
+if [[ $package_installation == "true" ]]; then
     # Grab session information based on ide
     if [ "$ide" == "tmate" ]; then
         # Waiting for the job initialization and extracting IP
