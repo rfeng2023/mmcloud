@@ -24,6 +24,7 @@ show_help() {
     echo "  --parallel-commands <value>               Set the number of commands to run in parallel (default: min number of CPUs)."
     echo "  --min-cores-per-command <value>           Specify the minimum number of CPU cores required per command (optional)."
     echo "  --min-mem-per-command <value>             Specify the minimum amount of memory in GB required per command (optional)."
+    echo "  --float-executable <path>                 Specify the path to the float executable (default: float)."
     echo "  --help                                    Show this help message."
 }
 
@@ -45,6 +46,7 @@ entrypoint=""
 cwd="~"
 job_size=""
 opcenter="44.222.241.133"
+float_executable="float"
 parallel_commands=""
 min_cores_per_command=0
 min_mem_per_command=0
@@ -177,6 +179,10 @@ while (( "$#" )); do
         shift
       done
       ;;
+    --float-executable)
+      float_executable="$2"
+      shift 2
+      ;;
     --dryrun)
       dryrun=true
       shift
@@ -267,7 +273,7 @@ check_required_params() {
 
 float_check_status() {
   
-  local output=$(float login --info)
+  local output=$($float_executable login --info)
   local address=$(echo "$output" | grep -o 'address: [0-9.]*' | awk '{print $2}')
 
   if [ "$address" == "" ];then
@@ -566,7 +572,7 @@ EOF
             job_filename=${TMPDIR:-/tmp}/${script_file%.*}/$j.mmjob.sh
         fi
         printf "$job_script" > $job_filename 
-        full_cmd+="float submit -a $opcenter -i '$image' -j $job_filename -c $c_min$c_max -m $m_min$m_max --vmPolicy $vm_policy_command $dataVolume_params $volume_params "
+        full_cmd+="$float_executable submit -a $opcenter -i '$image' -j $job_filename -c $c_min$c_max -m $m_min$m_max --vmPolicy $vm_policy_command $dataVolume_params $volume_params "
 
         # Added extra parameters if given
         for param in "${extra_parameters[@]}"; do
