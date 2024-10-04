@@ -95,6 +95,9 @@ fi
 if [[ "$publish_set" == false && "$ide" == "rstudio" ]]; then
     publish="8787:8787"
 fi
+if [[ "$publish_set" == false && "$ide" == "vscode" ]]; then
+    publish="8989:8989"
+fi
 
 # Prompt for user and password if not provided
 if [[ -z "$user" ]]; then
