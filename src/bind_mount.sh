@@ -102,6 +102,15 @@ case "${VMUI}" in
       start_terminal_server
     fi
     ;;
+  vscode)
+    if is_available code-server; then
+      echo "VS Code is available via code-server. Starting ..."
+      code-server
+    else
+      echo "VS Code is not available."
+      start_terminal_server
+    fi
+    ;;
   nvim)
     if is_available nvim; then
       echo "Nvim is available. Starting Nvim ..."

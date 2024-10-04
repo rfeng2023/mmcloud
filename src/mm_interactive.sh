@@ -265,8 +265,14 @@ case "$ide" in
     rstudio)
         IP_ADDRESS=$(get_public_ip "$jobid")
         echo "To access RStudio Server, navigate to http://$IP_ADDRESS in your web browser."
-        echo "Please give the instance about 5 minutes to start RStudio"
+        echo "Please give the instance about 10 minutes to start RStudio"
         echo "RStudio Server URL: http://$IP_ADDRESS" > "${jobid}_rstudio.log"
+        ;;
+    vscode)
+        IP_ADDRESS=$(get_public_ip "$jobid")
+        echo "To access code-server, navigate to http://$IP_ADDRESS in your web browser."
+        echo "Please give the instance about 10 minutes to start code-server"
+        echo "code-server URL: http://$IP_ADDRESS" > "${jobid}_code-server.log"
         ;;
     *)
         echo "Unrecognized IDE specified: $ide"
