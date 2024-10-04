@@ -3,31 +3,32 @@ username=$(whoami)
 cd /home/$username
 
 # Link necessary dirs and files
-ln -s /mnt/jfs/$FLOAT_USER/.pixi /home/$username/.pixi
+ln -s /mnt/efs/$FLOAT_USER/.pixi /home/$username/.pixi
 echo 'default_channels = ["dnachun", "conda-forge", "bioconda"]' > /home/$username/.pixi/config.toml
-ln -s /mnt/jfs/$FLOAT_USER/micromamba /home/$username/micromamba
-ln -s /mnt/jfs/$FLOAT_USER/.config /home/$username/.config
-ln -s /mnt/jfs/$FLOAT_USER/.cache /home/$username/.cache
-ln -s /mnt/jfs/$FLOAT_USER/.conda /home/$username/.conda
-ln -s /mnt/jfs/$FLOAT_USER/.condarc /home/$username/.condarc
-ln -s /mnt/jfs/$FLOAT_USER/.ipython /home/$username/.ipython
-ln -s /mnt/jfs/$FLOAT_USER/.jupyter /home/$username/.jupyter
-ln -s /mnt/jfs/$FLOAT_USER/.mamba /home/$username/.mamba
-ln -s /mnt/jfs/$FLOAT_USER/.local /home/$username/.local
+ln -s /mnt/efs/$FLOAT_USER/micromamba /home/$username/micromamba
+ln -s /mnt/efs/$FLOAT_USER/.config /home/$username/.config
+ln -s /mnt/efs/$FLOAT_USER/.cache /home/$username/.cache
+ln -s /mnt/efs/$FLOAT_USER/.conda /home/$username/.conda
+ln -s /mnt/efs/$FLOAT_USER/.condarc /home/$username/.condarc
+ln -s /mnt/efs/$FLOAT_USER/.ipython /home/$username/.ipython
+ln -s /mnt/efs/$FLOAT_USER/.jupyter /home/$username/.jupyter
+ln -s /mnt/efs/$FLOAT_USER/.mamba /home/$username/.mamba
+ln -s /mnt/efs/$FLOAT_USER/.local /home/$username/.local
+ln -s /mnt/efs/$FLOAT_USER/.mambarc /home/$username/.mambarc
 
 # Remove already existing .bashrc and .profile
 rm /home/$username/.bashrc /home/$username/.profile
 
-# Set a basic .bashrc and .profile if jfs does not have them
-if [ ! -f /mnt/jfs/$FLOAT_USER/.bashrc ]; then
-  cat << EOF > /mnt/jfs/$FLOAT_USER/.bashrc
+# Set a basic .bashrc and .profile if efs does not have them
+if [ ! -f /mnt/efs/$FLOAT_USER/.bashrc ]; then
+  cat << EOF > /mnt/efs/$FLOAT_USER/.bashrc
 export PATH="\${HOME}/.pixi/bin:\${PATH}"
 unset PYTHONPATH
 export PYDEVD_DISABLE_FILE_VALIDATION=1
 EOF
 fi
-if [ ! -f /mnt/jfs/$FLOAT_USER/.profile ]; then
-  cat << EOF > /mnt/jfs/$FLOAT_USER/.profile
+if [ ! -f /mnt/efs/$FLOAT_USER/.profile ]; then
+  cat << EOF > /mnt/efs/$FLOAT_USER/.profile
 # if running bash
 if [ -n "\$BASH_VERSION" ]; then
   # include .bashrc if it exists
@@ -48,8 +49,8 @@ fi
 EOF
 fi
 
-ln -s /mnt/jfs/$FLOAT_USER/.bashrc /home/$username/.bashrc
-ln -s /mnt/jfs/$FLOAT_USER/.profile /home/$username/.profile
+ln -s /mnt/efs/$FLOAT_USER/.bashrc /home/$username/.bashrc
+ln -s /mnt/efs/$FLOAT_USER/.profile /home/$username/.profile
 
 # Run the original entrypoint script
 # Function to check if a command is available
@@ -61,6 +62,11 @@ is_available() {
   else
     return 1
   fi
+}
+
+# Function to check if a command is available
+is_available() {
+  command -v "$1" &> /dev/null
 }
 
 # Function to start the terminal server
@@ -88,9 +94,9 @@ case "${VMUI}" in
     fi
     ;;
   rstudio)
-    if is_available rstudio; then
+    if is_available rserver; then
       echo "RStudio is available. Starting RStudio ..."
-      rstudio
+      rserver --config-file=${HOME}/.pixi/envs/rstudio/etc/rstudio/rserver.conf
     else
       echo "RStudio is not available."
       start_terminal_server
@@ -105,10 +111,6 @@ case "${VMUI}" in
       start_terminal_server
     fi
     ;;
-  tmate)
-    echo "Starting tmate."
-    start_terminal_server
-  ;;
   *)
     echo "Unknown UI specified: ${VMUI}."
     start_terminal_server
