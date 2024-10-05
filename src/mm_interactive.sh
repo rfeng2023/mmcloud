@@ -160,7 +160,7 @@ float_submit_args=(
     "--publish" "$publish"
     "--securityGroup" "$securityGroup"
     "--withRoot"
-    "--allowList" "[r*,m*]"
+    "--allowList" "[r5*,r6*,r7*,m*]"
     "-e" "GRANT_SUDO=yes"
     "--env" "JUPYTER_RUNTIME_DIR=/tmp/jupyter_runtime"
     "--env" "JUPYTER_ENABLE_LAB=TRUE"
