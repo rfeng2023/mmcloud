@@ -61,7 +61,7 @@ while [[ "$#" -gt 0 ]]; do
         -u|--user) user="$2"; shift ;;
         -p|--password) password="$2"; shift ;;
         -s3|--s3_path) s3_path="$2"; shift ;;
-        --VM_path) VM_path="$2"; shift ;;
+        -vm|--VM_path) VM_path="$2"; shift ;;
         -i|--image) image="$2"; shift ;;
         -c|--core) core="$2"; shift ;;
         -m|--mem) mem="$2"; shift ;;
@@ -84,6 +84,12 @@ done
 
 # Now that all variables are initialized, we can set -u
 set -u
+
+valid_ides=("tmate" "jupyter" "jupyter-lab" "rstudio" "vscode")
+if [[ ! " ${valid_ides[*]} " =~ " ${ide} " ]]; then
+    echo "Error: Invalid IDE specified. Please choose one of: ${valid_ides[*]}"
+    exit 1
+fi
 
 # Update hard-coded security group and gateway if OpCenter is 3.82.198.55
 if [[ "$OP_IP" == "3.82.198.55" ]]; then
