@@ -9,7 +9,7 @@ s3_path="s3://statfungen/ftp_fgc_xqtl"
 VM_path="/data/"
 image="quay.io/danielnachun/tmate-minimal"
 core=4
-mem=16
+mem=32
 publish="8888:8888"
 securityGroup="sg-02867677e76635b25"
 gateway="g-9xahbrb5rkbs0ic8yzylk"
@@ -160,7 +160,7 @@ float_submit_args=(
     "--publish" "$publish"
     "--securityGroup" "$securityGroup"
     "--withRoot"
-    "--allowList" "[m*]"
+    "--allowList" "[r*]"
     "-e" "GRANT_SUDO=yes"
     "--env" "JUPYTER_RUNTIME_DIR=/tmp/jupyter_runtime"
     "--env" "JUPYTER_ENABLE_LAB=TRUE"
