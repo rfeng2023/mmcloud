@@ -6,7 +6,7 @@ set -euo pipefail
 # Default values for parameters
 OP_IP="44.222.241.133"
 s3_path="s3://statfungen/ftp_fgc_xqtl"
-VM_path="/data/"
+vm_path="/data/"
 image="quay.io/danielnachun/tmate-minimal"
 core=4
 mem=16
@@ -36,7 +36,7 @@ usage() {
     echo "  -u, --user <username>            Set the username"
     echo "  -p, --password <password>        Set the password"
     echo "  -s3, --s3_path <path>            Set the S3 path"
-    echo "  --VM_path <path>                 Set the VM path"
+    echo "  --vm_path <path>                 Set the VM path"
     echo "  -i, --image <image>              Set the Docker image"
     echo "  -c, --core <cores>               Set the number of cores"
     echo "  -m, --mem <memory>               Set the memory size"
@@ -61,7 +61,7 @@ while [[ "$#" -gt 0 ]]; do
         -u|--user) user="$2"; shift ;;
         -p|--password) password="$2"; shift ;;
         -s3|--s3_path) s3_path="$2"; shift ;;
-        -vm|--VM_path) VM_path="$2"; shift ;;
+        -vm|--vm_path) vm_path="$2"; shift ;;
         -i|--image) image="$2"; shift ;;
         -c|--core) core="$2"; shift ;;
         -m|--mem) mem="$2"; shift ;;
@@ -114,9 +114,16 @@ if [[ -z "$password" ]]; then
     echo ""
 fi
 
+# Set default job_name if not provided by user
+if [[ -z "$job_name" ]]; then
+    # Extract the published port from the publish variable
+    published_port=$(echo "$publish" | cut -d':' -f1)
+    job_name="${user}_${ide}_${published_port}"
+fi
+
 # Data volume handling
 if [[ $no_mount == false ]]; then
-    dataVolumeOption=("--dataVolume" "[mode=rw,endpoint=s3.us-east-1.amazonaws.com]$s3_path:$VM_path")
+    dataVolumeOption=("--dataVolume" "[mode=rw,endpoint=s3.us-east-1.amazonaws.com]$s3_path:$vm_path")
     if [[ ${#additional_mounts[@]} -gt 0 ]]; then  # Check if additional_mounts has any elements
         for mount in "${additional_mounts[@]}"; do
             dataVolumeOption+=("--dataVolume" "[mode=rw,endpoint=s3.us-east-1.amazonaws.com]${mount}")
@@ -180,11 +187,9 @@ if [[ "$mount_packages" == "true" ]]; then
         "-j" "$script_dir/bind_mount.sh"
         "--hostInit" "$script_dir/host_init.sh"
         "--dirMap" "/mnt/efs:/mnt/efs"
+        "-n" "$job_name"
     )
 fi
-
-# Include job name if provided
-[[ -n "$job_name" ]] && float_submit_args+=("-n" "$job_name")
 
 # Display the float submit command
 echo -e "[Float submit command]: ${float_submit_args[*]}"
