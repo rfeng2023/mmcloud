@@ -115,10 +115,13 @@ if [[ -z "$password" ]]; then
 fi
 
 # Set default job_name if not provided by user
+published_port=$(echo "$publish" | cut -d':' -f1)
 if [[ -z "$job_name" ]]; then
     # Extract the published port from the publish variable
-    published_port=$(echo "$publish" | cut -d':' -f1)
     job_name="${user}_${ide}_${published_port}"
+# If there is a custom job name, we add identifiers to the end
+else
+    job_name+=".${user}_${ide}_${published_port}"
 fi
 
 # Data volume handling
@@ -189,6 +192,56 @@ if [[ "$mount_packages" == "true" ]]; then
         "--dirMap" "/mnt/efs:/mnt/efs"
         "-n" "$job_name"
     )
+fi
+
+# Determine if there are exisitng interactive jobs for this user
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+# If ide is tmate, warn user about initial package setup
+if [ $ide == "tmate" ]; then
+    while true; do
+    echo -e "${RED}WARNING: ${NC}tmate sessions are meant for initial package setup only. Do you wish to proceed (y/N)? \c"
+    read input
+    input=${input:-n}  # Default to "n" if no input is given
+    case $input in
+        [yY]) 
+            break
+            ;;
+        [nN]) 
+            echo "Exiting the script."
+            exit 0
+            ;;
+        *) 
+            echo "Invalid input. Please enter 'y' or 'n'."
+            ;;
+    esac
+done
+fi
+# Check for existing jobs under this user that follow the same naming format (user should already be logged in)
+# Determine if at least one job with the same naming format is Executing or Suspended
+executing_jobs=$($float_executable list -f user=ashley_2 -f status=Executing | awk '{print $4}' | grep -v -e '^$' -e 'NAME' | grep "${user}_${ide}_${published_port}" || true)
+suspended_jobs=$($float_executable list -f user=ashley_2 -f status=Suspended | awk '{print $4}' | grep -v -e '^$' -e 'NAME' | grep "${user}_${ide}_${published_port}" || true)
+
+# If there exists executing or suspended jobs that match the ID, warn user
+if [[ -n "$executing_jobs" || -n "$suspended_jobs" ]]; then
+    echo -e "${RED}WARNING: ${NC}User ${RED}$user${NC} already has existing interactive jobs under the same ide ${RED}$ide${NC} and port ${RED}$published_port${NC}."
+    while true; do
+        echo -e "Do you wish to proceed (y/N)? \c"
+        read input
+        input=${input:-n}  # Default to "n" if no input is given
+        case $input in
+            [yY]) 
+                break
+                ;;
+            [nN]) 
+                echo "Exiting the script."
+                exit 0
+                ;;
+            *) 
+                echo "Invalid input. Please enter 'y' or 'n'."
+                ;;
+        esac
+    done
 fi
 
 # Display the float submit command
