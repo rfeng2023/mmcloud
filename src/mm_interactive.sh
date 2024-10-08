@@ -85,10 +85,34 @@ done
 # Now that all variables are initialized, we can set -u
 set -u
 
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
 valid_ides=("tmate" "jupyter" "jupyter-lab" "rstudio" "vscode")
 if [[ ! " ${valid_ides[*]} " =~ " ${ide} " ]]; then
     echo "Error: Invalid IDE specified. Please choose one of: ${valid_ides[*]}"
     exit 1
+fi
+
+# If ide is tmate, warn user about initial package setup
+if [ $ide == "tmate" ]; then
+    while true; do
+    echo -e "${RED}NOTICE:${NC} tmate sessions are primarily designed for initial package configuration.\nFor regular development work, we recommend utilizing a more advanced Integrated Development Environment (IDE)\nvia the -ide option, if you have previously set up an alternative IDE.\n\nDo you wish to proceed with the tmate session? (y/N): \c"
+    read input
+    input=${input:-n}  # Default to "n" if no input is given
+    case $input in
+        [yY]) 
+            break
+            ;;
+        [nN]) 
+            echo "Exiting the script."
+            exit 0
+            ;;
+        *) 
+            echo "Invalid input. Please enter 'y' or 'n'."
+            ;;
+    esac
+done
 fi
 
 # Update hard-coded security group and gateway if OpCenter is 3.82.198.55
@@ -195,30 +219,6 @@ if [[ "$mount_packages" == "true" ]]; then
 fi
 
 # Determine if there are exisitng interactive jobs for this user
-RED='\033[0;31m'
-NC='\033[0m' # No Color
-# If ide is tmate, warn user about initial package setup
-if [ $ide == "tmate" ]; then
-    while true; do
-    echo -e "${RED}NOTICE:${NC} tmate sessions are primarily designed for initial package configuration.\nFor regular development work, we recommend utilizing a more advanced Integrated Development Environment (IDE)\nvia the -ide option, if you have previously set up an alternative IDE.\n\nDo you wish to proceed with the tmate session? (y/N): \c"
-    read input
-    input=${input:-n}  # Default to "n" if no input is given
-    case $input in
-        [yY]) 
-            break
-            ;;
-        [nN]) 
-            echo "Exiting the script."
-            exit 0
-            ;;
-        *) 
-            echo "Invalid input. Please enter 'y' or 'n'."
-            ;;
-    esac
-done
-fi
-# Check for existing jobs under this user that follow the same naming format (user should already be logged in)
-# Determine if at least one job with the same naming format is Executing or Suspended
 running_jobs=$($float_executable list -f user=${user} -f "status=Executing or status=Suspended or status=Suspending or status=Starting or status=Initializing"| awk '{print $4}' | grep -v -e '^$' -e 'NAME' | grep "${user}_${ide}_${published_port}" || true)
 
 # If there exists executing or suspended jobs that match the ID, warn user
