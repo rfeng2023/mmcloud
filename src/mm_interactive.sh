@@ -200,7 +200,7 @@ NC='\033[0m' # No Color
 # If ide is tmate, warn user about initial package setup
 if [ $ide == "tmate" ]; then
     while true; do
-    echo -e "${RED}WARNING: ${NC}tmate sessions are meant for initial package setup only. Do you wish to proceed (y/N)? \c"
+    echo -e "${RED}NOTICE:${NC} tmate sessions are primarily designed for initial package configuration.\nFor regular development work, we recommend utilizing a more advanced Integrated Development Environment (IDE)\nvia the -ide option, if you have previously set up an alternative IDE.\n\nDo you wish to proceed with the tmate session? (y/N): \c"
     read input
     input=${input:-n}  # Default to "n" if no input is given
     case $input in
@@ -219,12 +219,12 @@ done
 fi
 # Check for existing jobs under this user that follow the same naming format (user should already be logged in)
 # Determine if at least one job with the same naming format is Executing or Suspended
-executing_jobs=$($float_executable list -f user=ashley_2 -f status=Executing | awk '{print $4}' | grep -v -e '^$' -e 'NAME' | grep "${user}_${ide}_${published_port}" || true)
-suspended_jobs=$($float_executable list -f user=ashley_2 -f status=Suspended | awk '{print $4}' | grep -v -e '^$' -e 'NAME' | grep "${user}_${ide}_${published_port}" || true)
+running_jobs=$($float_executable list -f user=${user} -f "status=Executing or status=Suspended or status=Suspending or status=Starting or status=Initializing"| awk '{print $4}' | grep -v -e '^$' -e 'NAME' | grep "${user}_${ide}_${published_port}" || true)
 
 # If there exists executing or suspended jobs that match the ID, warn user
-if [[ -n "$executing_jobs" || -n "$suspended_jobs" ]]; then
-    echo -e "${RED}WARNING: ${NC}User ${RED}$user${NC} already has existing interactive jobs under the same ide ${RED}$ide${NC} and port ${RED}$published_port${NC}."
+if [[ -n "$running_jobs" ]]; then
+    job_count=$(echo "$running_jobs" | wc -l)    	
+    echo -e "${RED}WARNING: ${NC}User ${RED}$user${NC} already has ${job_count} existing interactive jobs under the same ide ${RED}$ide${NC} and port ${RED}$published_port${NC}."
     while true; do
         echo -e "Do you wish to proceed (y/N)? \c"
         read input
