@@ -97,7 +97,7 @@ case "${VMUI}" in
               break
           fi
           # Optionally, add a short sleep to avoid immediate retries
-          sleep 30s
+          sleep 15s
       done
     else
       echo "JupyterLab is not available."
