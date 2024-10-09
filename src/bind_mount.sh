@@ -86,8 +86,19 @@ fi
 case "${VMUI}" in
   jupyter|jupyter-lab)
     if is_available jupyter-lab; then
-      echo "JupyterLab is available. Starting JupyterLab ..."
-      jupyter-lab
+      echo "[$(date)]: JupyterLab is available. Starting JupyterLab ..."
+      while true; do
+          jupyter-lab
+          # Check if jupyter-lab exited with a non-zero exit code
+          if [ $? -ne 0 ]; then
+              echo "[$(date)]: Jupyter Lab crashed, restarting..."
+          else
+              echo "[$(date)]: Jupyter Lab exited normally."
+              break
+          fi
+          # Optionally, add a short sleep to avoid immediate retries
+          sleep 15s
+      done
     else
       echo "JupyterLab is not available."
       start_terminal_server
