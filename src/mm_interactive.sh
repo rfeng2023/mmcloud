@@ -12,8 +12,6 @@ core=4
 mem=16
 publish="8888:8888"
 vm_policy="onDemand"
-image_vol_size=60
-root_vol_size=70
 ide="tmate"
 mount_packages="false"
 float_executable="float"
@@ -26,6 +24,8 @@ no_mount=false
 additional_mounts=()
 publish_set=false
 gateway="" # Default will be set later, as it depends on OP_IP
+image_vol_size=""
+root_vol_size=""
 
 # Function to display usage information
 usage() {
@@ -201,8 +201,6 @@ float_submit_args=(
     "$float_executable" "submit" "-a" "$OP_IP"
     "-i" "$image" "-c" "$core" "-m" "$mem"
     "--vmPolicy" "$vm_policy_command"
-    "--imageVolSize" "$image_vol_size"
-    "--rootVolSize" "$root_vol_size"
     "--gateway" "$gateway"
     "--migratePolicy" "[disable=true,evadeOOM=false]"
     "--publish" "$publish"
@@ -215,6 +213,18 @@ float_submit_args=(
     "--env" "VMUI=$ide"
     "${dataVolumeOption[@]}"
 )
+
+# If image vol size and root vol size not empty, populate float args
+if [[ ! -z "$image_vol_size" ]]; then
+    float_submit_args+=(
+        "--imageVolSize" "$image_vol_size"
+    )
+fi
+if [[ ! -z "$root_vol_size" ]]; then
+    float_submit_args+=(
+        "--rootVolSize" "$root_vol_size"
+    )
+fi
 
 # Add host-init and mount-init if specified
 if [[ "$mount_packages" == "true" ]]; then
