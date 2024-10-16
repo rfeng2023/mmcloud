@@ -11,11 +11,7 @@ image="quay.io/danielnachun/tmate-minimal"
 core=4
 mem=16
 publish="8888:8888"
-securityGroup="sg-02867677e76635b25"
-gateway="g-9xahbrb5rkbs0ic8yzylk"
 vm_policy="onDemand"
-image_vol_size=60
-root_vol_size=70
 ide="tmate"
 mount_packages="false"
 float_executable="float"
@@ -27,6 +23,9 @@ job_name=""
 no_mount=false
 additional_mounts=()
 publish_set=false
+gateway="" # Default will be set later, as it depends on OP_IP
+image_vol_size=""
+root_vol_size=""
 
 # Function to display usage information
 usage() {
@@ -51,6 +50,7 @@ usage() {
     echo "  -jn, --job_name <name>           Set the job name"
     echo "  --mount-packages                 Mount dedicated volumes on AWS to accommodate conda package installation and usage"
     echo "  --float-executable <path>        Set the path to the float executable (default: float)"
+    echo "  -g, --gateway <id>               Set gatewayID (default: default gateway on corresponding OpCenter)"
     echo "  -h, --help                       Display this help message"
 }
 
@@ -76,6 +76,7 @@ while [[ "$#" -gt 0 ]]; do
         -jn|--job_name) job_name="$2"; shift ;;
         --mount-packages) mount_packages="true" ;;
         --float-executable) float_executable="$2"; shift ;;
+        -g|--gateway) gateway="$2"; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown parameter passed: $1"; usage; exit 1 ;;
     esac
@@ -115,10 +116,17 @@ if [ $ide == "tmate" ]; then
 done
 fi
 
-# Update hard-coded security group and gateway if OpCenter is 3.82.198.55
+# Update hard-coded security group and gateway if no specific gateway given
 if [[ "$OP_IP" == "3.82.198.55" ]]; then
-    gateway="g-4nntvdipikat0673xagju"
     securityGroup="sg-00c7a6c97b097ec7b"
+    if [[ -z "$gateway" ]]; then
+        gateway="g-4nntvdipikat0673xagju"
+    fi
+elif [[ "$OP_IP" == "44.222.241.133" ]]; then
+    securityGroup="sg-02867677e76635b25"
+    if [[ -z "$gateway" ]]; then
+        gateway="g-9xahbrb5rkbs0ic8yzylk"
+    fi
 fi
 
 # Adjust publish port if not set by user and ide is rstudio
@@ -193,8 +201,6 @@ float_submit_args=(
     "$float_executable" "submit" "-a" "$OP_IP"
     "-i" "$image" "-c" "$core" "-m" "$mem"
     "--vmPolicy" "$vm_policy_command"
-    "--imageVolSize" "$image_vol_size"
-    "--rootVolSize" "$root_vol_size"
     "--gateway" "$gateway"
     "--migratePolicy" "[disable=true,evadeOOM=false]"
     "--publish" "$publish"
@@ -207,6 +213,18 @@ float_submit_args=(
     "--env" "VMUI=$ide"
     "${dataVolumeOption[@]}"
 )
+
+# If image vol size and root vol size not empty, populate float args
+if [[ ! -z "$image_vol_size" ]]; then
+    float_submit_args+=(
+        "--imageVolSize" "$image_vol_size"
+    )
+fi
+if [[ ! -z "$root_vol_size" ]]; then
+    float_submit_args+=(
+        "--rootVolSize" "$root_vol_size"
+    )
+fi
 
 # Add host-init and mount-init if specified
 if [[ "$mount_packages" == "true" ]]; then
