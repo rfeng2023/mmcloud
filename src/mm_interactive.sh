@@ -51,6 +51,8 @@ usage() {
     echo "  --mount-packages                 Mount dedicated volumes on AWS to accommodate conda package installation and usage"
     echo "  --float-executable <path>        Set the path to the float executable (default: float)"
     echo "  -g, --gateway <id>               Set gatewayID (default: default gateway on corresponding OpCenter)"
+    echo "  --oem-admin                      Run in admin mode to make changes to OEM packages"
+    echo "  --shared-admin                   Run in admin mode to make changes to shared packages"
     echo "  -h, --help                       Display this help message"
 }
 
@@ -78,6 +80,8 @@ while [[ "$#" -gt 0 ]]; do
         --float-executable) float_executable="$2"; shift ;;
         -g|--gateway) gateway="$2"; shift ;;
         -h|--help) usage; exit 0 ;;
+        --oem-admin) oem_admin=true ;;
+        --shared-admin) shared_admin=true ;;
         *) echo "Unknown parameter passed: $1"; usage; exit 1 ;;
     esac
     shift
@@ -233,6 +237,28 @@ if [[ "$mount_packages" == "true" ]]; then
         "--hostInit" "$script_dir/host_init.sh"
         "--dirMap" "/mnt/efs:/mnt/efs"
         "-n" "$job_name"
+    )
+fi
+
+if [[ "${oem_admin}" == "true" && ${shared_admin} == "true" ]]; then
+    echo -e "${RED}ERROR: only one of --oem-admin and --shared-admin can be specificied"; exit 1
+fi
+
+if [[ "${oem_admin}" == "true" || ${shared_admin} == "true" ]] && [[ ${mount_packages} == "false" ]]; then
+    echo -e "${RED}ERROR: --mount-packages must be specified when --oem-admin or --shared-admin are specified"; exit 1
+fi
+
+if [[ "${oem_admin}" == "true" ]]; then
+    float_submit_args+=(
+        "--env" "MODE=oem_admin"
+    )
+elif [[ "${shared_admin}" == "true" ]]; then
+    float_submit_args+=(
+        "--env" "MODE=shared_admin"
+    )
+else 
+    float_submit_args+=(
+        "--env" "MODE=user"
     )
 fi
 

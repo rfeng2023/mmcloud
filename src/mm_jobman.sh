@@ -518,11 +518,15 @@ submit_each_line_with_mmfloat() {
 
 set -o errexit -o pipefail
 
+# Symlink /mnt/efs/oem folders to \${HOME} to make software available
+username=\$(whoami)
+chmod -w /mnt/efs/oem
+ln -sf /mnt/efs/oem/.pixi /home/\${username}/.pixi
+ln -sf /mnt/efs/oem/micromamba /home/\${username}/micromamba
+export PATH="\${HOME}/.pixi/bin:\${PATH}"
+
 # Function definition for calculate_max_parallel_jobs
 ${calculate_max_parallel_jobs_def}
-
-# Activate environment with entrypoint in job script
-${entrypoint}
 
 # Create directories if they don't exist for download
 ${download_mkdir}

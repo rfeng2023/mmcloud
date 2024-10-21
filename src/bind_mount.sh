@@ -2,33 +2,56 @@
 username=$(whoami)
 cd /home/$username
 
-# Link necessary dirs and files
-ln -s /mnt/efs/$FLOAT_USER/.pixi /home/$username/.pixi
-echo 'default_channels = ["dnachun", "conda-forge", "bioconda"]' > /home/$username/.pixi/config.toml
-ln -s /mnt/efs/$FLOAT_USER/micromamba /home/$username/micromamba
-ln -s /mnt/efs/$FLOAT_USER/.config /home/$username/.config
-ln -s /mnt/efs/$FLOAT_USER/.cache /home/$username/.cache
-ln -s /mnt/efs/$FLOAT_USER/.conda /home/$username/.conda
-ln -s /mnt/efs/$FLOAT_USER/.condarc /home/$username/.condarc
-ln -s /mnt/efs/$FLOAT_USER/.ipython /home/$username/.ipython
-ln -s /mnt/efs/$FLOAT_USER/.jupyter /home/$username/.jupyter
-ln -s /mnt/efs/$FLOAT_USER/.mamba /home/$username/.mamba
-ln -s /mnt/efs/$FLOAT_USER/.local /home/$username/.local
-ln -s /mnt/efs/$FLOAT_USER/.mambarc /home/$username/.mambarc
+link_paths() {
+    efs_path=$1
+    local_path=$2
+    paths=$3
 
-# Remove already existing .bashrc and .profile
-rm /home/$username/.bashrc /home/$username/.profile
+    # Always link .pixi and micromamba folders from EFS mount to destination path
+    ln -s ${efs_path}/.pixi ${local_path}/.pixi
+    ln -s ${efs_path}/micromamba ${local_path}/micromamba
 
-# Set a basic .bashrc and .profile if efs does not have them
-if [ ! -f /mnt/efs/$FLOAT_USER/.bashrc ]; then
-  cat << EOF > /mnt/efs/$FLOAT_USER/.bashrc
+    # If we are mounting "minimal" paths and shared mode is "user", then we are linking a read-only,
+    # shared software path so we make the mount path read only
+    if [[ ${paths} == "minimal" && ${MODE} == "user" ]]; then
+        chmod -w ${efs_path}/.pixi
+        chmod -w ${efs_path}/micromamba
+    fi
+
+    # If we are mountng "full" paths, link all of the directories with config files
+    if [[ ${paths} == "full" ]]; then
+        # We probably don't need this first line any more - need to check
+        echo 'default_channels = ["dnachun", "conda-forge", "bioconda"]' > ${local_path}/.pixi/config.toml
+
+        ln -s ${efs_path}/.config ${local_path}/.config
+        ln -s ${efs_path}/.cache ${local_path}/.cache
+        ln -s ${efs_path}/.conda ${local_path}/.conda
+        ln -s ${efs_path}/.condarc ${local_path}/.condarc
+        ln -s ${efs_path}/.ipython ${local_path}/.ipython
+        ln -s ${efs_path}/.jupyter ${local_path}/.jupyter
+        ln -s ${efs_path}/.mamba ${local_path}/.mamba
+        ln -s ${efs_path}/.local ${local_path}/.local
+        ln -s ${efs_path}/.mambarc ${local_path}/.mambarc
+    fi
+
+    # If we are linking full paths, create a basic .bashrc and .profile if they don't exist on the EFS mount
+    # and link those files to the local path
+    # We also need to do this if we are in admin mode for the shared or OEM folders, as these folders (for now) won't have a bashrc
+    if [[ ${paths} == "full" || ${MODE} == "oem_admin" || ${MODE} == "shared_admin" ]]; then
+        # Remove existing .bashrc and .profile
+        rm ${local_path}/.bashrc ${local_path}/.profile
+
+        # Set a basic .bashrc and .profile if efs does not have them
+        if [ ! -f ${efs_path}/.bashrc ]; then
+            tee ${efs_path}/.bashrc << EOF
+export PATH="/opt/.pixi/bin:\${PATH}"
 export PATH="\${HOME}/.pixi/bin:\${PATH}"
 unset PYTHONPATH
 export PYDEVD_DISABLE_FILE_VALIDATION=1
 EOF
-fi
-if [ ! -f /mnt/efs/$FLOAT_USER/.profile ]; then
-  cat << EOF > /mnt/efs/$FLOAT_USER/.profile
+        fi
+        if [ ! -f ${efs_path}/.profile ]; then
+            cat ${efs_path}/.profile << EOF
 # if running bash
 if [ -n "\$BASH_VERSION" ]; then
   # include .bashrc if it exists
@@ -36,35 +59,29 @@ if [ -n "\$BASH_VERSION" ]; then
       . "\$HOME/.bashrc"
   fi
 fi
-
-# set PATH so it includes user's private bin if it exists
-if [ -d "\$HOME/bin" ] ; then
-  PATH="\$HOME/bin:\$PATH"
-fi
-
-# set PATH so it includes user's private bin if it exists
-if [ -d "\$HOME/.local/bin" ] ; then
-  PATH="\$HOME/.local/bin:\$PATH"
-fi
 EOF
-fi
+        fi
 
-ln -s /mnt/efs/$FLOAT_USER/.bashrc /home/$username/.bashrc
-ln -s /mnt/efs/$FLOAT_USER/.profile /home/$username/.profile
+        ln -s ${efs_path}/.bashrc ${local_path}/.bashrc
+        ln -s ${efs_path}/.profile ${local_path}/.profile
+    fi
+}
+
+# Link necessary dirs and files
+if [[ ${MODE} == "oem_admin" ]]; then
+    link_paths /mnt/efs/oem /home/${username} minimal
+elif [[ ${MODE} == "shared_admin" ]]; then
+    link_paths /mnt/efs/shared /home/${username} minimal
+elif [[ ${MODE} == "user" ]]; then
+    link_paths /mnt/efs/${FLOAT_USER} /home/${username} full
+    link_paths /mnt/efs/shared /opt minimal
+else
+    echo -e "ERROR: invalid mode specified - must be one of oem_admin, shared_admin or user"
+fi
 
 # Run the original entrypoint script
 # Function to check if a command is available
 export PATH="/home/$username/.pixi/bin":${PATH}
-is_available() {
-  location=$(which "$1" 2> /dev/null)
-  if [ ! -z $location ]; then
-    return 0
-  else
-    return 1
-  fi
-}
-
-# Function to check if a command is available
 is_available() {
   command -v "$1" &> /dev/null
 }
@@ -107,7 +124,7 @@ case "${VMUI}" in
   rstudio)
     if is_available rserver; then
       echo "RStudio is available. Starting RStudio ..."
-      rserver --config-file=${HOME}/.pixi/envs/rstudio/etc/rstudio/rserver.conf
+      rserver --config-file=${HOME}/.config/rstudio/rserver.conf
     else
       echo "RStudio is not available."
       start_terminal_server
