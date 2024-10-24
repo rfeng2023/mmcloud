@@ -234,7 +234,7 @@ fi
 if [[ "$mount_packages" == "true" ]]; then
     float_submit_args+=(
         "-j" "$script_dir/bind_mount.sh"
-        "--hostInit" "$script_dir/host_init.sh"
+        "--hostInit" "$script_dir/host_init_interactive.sh"
         "--dirMap" "/mnt/efs:/mnt/efs"
         "-n" "$job_name"
     )
