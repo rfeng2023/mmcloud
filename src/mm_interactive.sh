@@ -230,16 +230,6 @@ if [[ ! -z "$root_vol_size" ]]; then
     )
 fi
 
-# Add host-init and mount-init if specified
-if [[ "$mount_packages" == "true" ]]; then
-    float_submit_args+=(
-        "-j" "$script_dir/bind_mount.sh"
-        "--hostInit" "$script_dir/host_init_interactive.sh"
-        "--dirMap" "/mnt/efs:/mnt/efs"
-        "-n" "$job_name"
-    )
-fi
-
 if [[ "${oem_admin}" == "true" && ${shared_admin} == "true" ]]; then
     echo -e "${RED}ERROR: only one of --oem-admin and --shared-admin can be specificied"; exit 1
 fi
@@ -248,10 +238,12 @@ if [[ "${oem_admin}" == "true" || ${shared_admin} == "true" ]] && [[ ${mount_pac
     echo -e "${RED}ERROR: --mount-packages must be specified when --oem-admin or --shared-admin are specified"; exit 1
 fi
 
+host_script="host_init_interactive.sh"
 if [[ "${oem_admin}" == "true" ]]; then
     float_submit_args+=(
         "--env" "MODE=oem_admin"
     )
+    host_script="host_init_batch.sh"
 elif [[ "${shared_admin}" == "true" ]]; then
     float_submit_args+=(
         "--env" "MODE=shared_admin"
@@ -259,6 +251,16 @@ elif [[ "${shared_admin}" == "true" ]]; then
 else 
     float_submit_args+=(
         "--env" "MODE=user"
+    )
+fi
+
+# Add host-init and mount-init if specified
+if [[ "$mount_packages" == "true" ]]; then
+    float_submit_args+=(
+        "-j" "$script_dir/bind_mount.sh"
+        "--hostInit" "$script_dir/${host_script}"
+        "--dirMap" "/mnt/efs:/mnt/efs"
+        "-n" "$job_name"
     )
 fi
 
