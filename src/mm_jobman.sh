@@ -28,6 +28,18 @@ show_help() {
     echo "  --help                                    Show this help message."
 }
 
+function find_script_dir() {
+    SOURCE=${BASH_SOURCE[0]}
+    while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+        DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+        SOURCE=$(readlink "$SOURCE")
+        [[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+    done
+    DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+    echo $DIR
+}
+script_dir=$(find_script_dir)
+
 # Check if at least one argument is provided
 if [ "$#" -eq 0 ]; then
     show_help
@@ -518,11 +530,15 @@ submit_each_line_with_mmfloat() {
 
 set -o errexit -o pipefail
 
+# Symlink /mnt/efs/oem folders to \${HOME} to make software available
+username=\$(whoami)
+chmod -w /mnt/efs/oem
+ln -sf /mnt/efs/oem/.pixi /home/\${username}/.pixi
+ln -sf /mnt/efs/oem/micromamba /home/\${username}/micromamba
+export PATH="\${HOME}/.pixi/bin:\${PATH}"
+
 # Function definition for calculate_max_parallel_jobs
 ${calculate_max_parallel_jobs_def}
-
-# Activate environment with entrypoint in job script
-${entrypoint}
 
 # Create directories if they don't exist for download
 ${download_mkdir}
@@ -572,7 +588,7 @@ EOF
             job_filename=${TMPDIR:-/tmp}/${script_file%.*}/$j.mmjob.sh
         fi
         printf "$job_script" > $job_filename 
-        full_cmd+="$float_executable submit -a $opcenter -i '$image' -j $job_filename -c $c_min$c_max -m $m_min$m_max --vmPolicy $vm_policy_command $dataVolume_params $volume_params "
+        full_cmd+="$float_executable submit -a $opcenter -i '$image' -j $job_filename -c $c_min$c_max -m $m_min$m_max --hostInit $script_dir/host_init_batch.sh --vmPolicy $vm_policy_command $dataVolume_params $volume_params "
 
         # Added extra parameters if given
         for param in "${extra_parameters[@]}"; do
