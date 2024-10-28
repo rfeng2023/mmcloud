@@ -13,7 +13,7 @@ show_help() {
     echo "  --download-include '<value>'              Use the include flag to include certain files for download (space-separated) (optional)."
     echo "  --dryrun                                  Execute a dry run, printing commands without running them."
     echo "  --entrypoint '<command>'                  Set the initial command to run in the job script (required)."
-    echo "  --image <value>                           Specify the Docker image to use for the job (required)."
+    echo "  --image <value>                           Specify the Docker image to use for the job (default: quay.io/danielnachun/tmate-minimal)."
     echo "  --vm-policy <spotOnly|onDemand|spotFirst> Specify On-demand or Spot instance (default: spotFirst)".
     echo "  --job-size <value>                        Set the number of commands per job for creating virtual machines (required)."
     echo "  --mount <bucket>:<local>                  Mount an S3 bucket to a local directory. Format: <bucket>:<local path> (optional)."
@@ -53,7 +53,7 @@ m_min=""
 m_max=""
 vm_policy="spotOnly"
 declare -a mountOpt=()
-image=""
+image="quay.io/danielnachun/tmate-minimal"
 entrypoint=""
 cwd="~"
 job_size=""
@@ -232,10 +232,6 @@ check_required_params() {
     fi
     if [ -z "$m_min" ]; then
         missing_params+="-m, "
-        is_missing=true
-    fi
-    if [ -z "$image" ]; then
-        missing_params+="--image, "
         is_missing=true
     fi
     if [ -z "$job_size" ]; then

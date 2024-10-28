@@ -15,6 +15,7 @@ vm_policy="onDemand"
 ide="tmate"
 mount_packages="false"
 float_executable="float"
+dryrun=false
 
 # Initialize other variables
 user=""
@@ -26,6 +27,8 @@ publish_set=false
 gateway="" # Default will be set later, as it depends on OP_IP
 image_vol_size=""
 root_vol_size=""
+oem_admin=""
+shared_admin=""
 
 # Function to display usage information
 usage() {
@@ -53,6 +56,7 @@ usage() {
     echo "  -g, --gateway <id>               Set gatewayID (default: default gateway on corresponding OpCenter)"
     echo "  --oem-admin                      Run in admin mode to make changes to OEM packages"
     echo "  --shared-admin                   Run in admin mode to make changes to shared packages"
+    echo "  --dryrun                         Execute a dry run, printing commands without running them."
     echo "  -h, --help                       Display this help message"
 }
 
@@ -82,6 +86,7 @@ while [[ "$#" -gt 0 ]]; do
         -h|--help) usage; exit 0 ;;
         --oem-admin) oem_admin=true ;;
         --shared-admin) shared_admin=true ;;
+        --dryrun) dryrun=true ;;
         *) echo "Unknown parameter passed: $1"; usage; exit 1 ;;
     esac
     shift
@@ -291,11 +296,17 @@ if [[ -n "$running_jobs" ]]; then
 fi
 
 # Display the float submit command
+echo ""
 echo -e "[Float submit command]: ${float_submit_args[*]}"
 
 # Submit the job and retrieve job ID
-float_submit_output=$(echo "yes" | "${float_submit_args[@]}")
-jobid=$(echo "$float_submit_output" | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}' || true)
+# Execute or echo the full command
+if [ "$dryrun" = true ]; then
+    exit 0
+else
+    float_submit_output=$(echo "yes" | "${float_submit_args[@]}")
+    jobid=$(echo "$float_submit_output" | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}' || true)
+fi
 if [[ -z "$jobid" ]]; then
     echo "Error returned from float submission command! Exiting..."
     exit 1
