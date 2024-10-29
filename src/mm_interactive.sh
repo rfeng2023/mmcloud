@@ -126,13 +126,12 @@ done
 fi
 
 # Update hard-coded security group and gateway if no specific gateway given
+securityGroup="sg-02867677e76635b25"
 if [[ "$OP_IP" == "3.82.198.55" ]]; then
-    securityGroup="sg-00c7a6c97b097ec7b"
     if [[ -z "$gateway" ]]; then
         gateway="g-4nntvdipikat0673xagju"
     fi
 elif [[ "$OP_IP" == "44.222.241.133" ]]; then
-    securityGroup="sg-02867677e76635b25"
     if [[ -z "$gateway" ]]; then
         gateway="g-9xahbrb5rkbs0ic8yzylk"
     fi

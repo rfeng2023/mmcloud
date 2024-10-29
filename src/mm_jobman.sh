@@ -12,7 +12,6 @@ show_help() {
     echo "  --upload <local>:<remote>                 Upload folders to S3. Format: <local path>:<S3 path> (optional)."
     echo "  --download-include '<value>'              Use the include flag to include certain files for download (space-separated) (optional)."
     echo "  --dryrun                                  Execute a dry run, printing commands without running them."
-    echo "  --entrypoint '<command>'                  Set the initial command to run in the job script (required)."
     echo "  --image <value>                           Specify the Docker image to use for the job (default: quay.io/danielnachun/tmate-minimal)."
     echo "  --vm-policy <spotOnly|onDemand|spotFirst> Specify On-demand or Spot instance (default: spotFirst)".
     echo "  --job-size <value>                        Set the number of commands per job for creating virtual machines (required)."
@@ -54,9 +53,9 @@ m_max=""
 vm_policy="spotOnly"
 declare -a mountOpt=()
 image="quay.io/danielnachun/tmate-minimal"
-entrypoint=""
 cwd="~"
 job_size=""
+securityGroup=""
 opcenter="3.82.198.55"
 float_executable="float"
 parallel_commands=""
@@ -109,10 +108,6 @@ while (( "$#" )); do
       ;;
     --image)
       image="$2"
-      shift 2
-      ;;
-    --entrypoint)
-      entrypoint="$2"
       shift 2
       ;;
     --opcenter)
@@ -528,7 +523,6 @@ set -o errexit -o pipefail
 
 # Symlink /mnt/efs/oem folders to \${HOME} to make software available
 username=\$(whoami)
-chmod -w /mnt/efs/oem
 ln -sf /mnt/efs/oem/.pixi /home/\${username}/.pixi
 ln -sf /mnt/efs/oem/micromamba /home/\${username}/micromamba
 export PATH="\${HOME}/.pixi/bin:\${PATH}"
@@ -584,12 +578,18 @@ EOF
             job_filename=${TMPDIR:-/tmp}/${script_file%.*}/$j.mmjob.sh
         fi
         printf "$job_script" > $job_filename 
-        full_cmd+="$float_executable submit -a $opcenter -i '$image' -j $job_filename -c $c_min$c_max -m $m_min$m_max --hostInit $script_dir/host_init_batch.sh --vmPolicy $vm_policy_command $dataVolume_params $volume_params "
+        full_cmd+="$float_executable submit -a $opcenter -i '$image' -j $job_filename -c $c_min$c_max -m $m_min$m_max --hostInit $script_dir/host_init_batch.sh --dirMap /mnt/efs:/mnt/efs --withRoot --vmPolicy $vm_policy_command $dataVolume_params $volume_params "
 
         # Added extra parameters if given
         for param in "${extra_parameters[@]}"; do
           full_cmd+="$param "
         done
+
+        # Check security groups
+        # Update hard-coded security group and gateway if no specific gateway given
+        securityGroup="sg-02867677e76635b25"
+        full_cmd+="--securityGroup $securityGroup "
+
         full_cmd=${full_cmd%\ }
 
         # Execute or echo the full command
@@ -613,7 +613,6 @@ main() {
         echo "#mountOpt value: $mountOpt"
         echo "#image value: $image"
         echo "#opcenter value: $opcenter"
-        echo "#entrypoint value: $entrypoint"
         echo "#cwd value: $cwd"
         echo "#job-size: $job_size"
         echo "#parallel-commands: $parallel_commands"

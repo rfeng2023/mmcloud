@@ -1,6 +1,7 @@
 #!/bin/bash
 
 cd /root
+MODE=${MODE:-""}
 
 # Install aws
 alias aws="/usr/local/aws-cli/v2/current/bin/aws"
@@ -10,7 +11,14 @@ export PATH="/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:${PATH}"
 yum install fuse gcc python3 bash nfs-utils --quiet -y
 sudo mkdir -p /mnt/efs
 sudo chmod 777 /mnt/efs
-sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport 10.1.10.231:/ /mnt/efs
+# If mode is NOT oem_admin, set EFS to read only
+if [[ ! -n ${MODE} ]]; then
+    echo "MODE is NOT oem_admin. Set EFS to read-only"
+    sudo mount -t nfs4 -o ro -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport 10.1.10.231:/ /mnt/efs
+else
+    sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport 10.1.10.231:/ /mnt/efs
+fi
+
 
 # Make sure it is mounted before end script
 sleep 10s
