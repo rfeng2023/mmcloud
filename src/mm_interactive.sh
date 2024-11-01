@@ -255,6 +255,7 @@ elif [[ "${shared_admin}" == "true" ]]; then
 else 
     float_submit_args+=(
         "--env" "MODE=user"
+        "--dirMap" "/opt/shared:/opt/shared"
     )
 fi
 
