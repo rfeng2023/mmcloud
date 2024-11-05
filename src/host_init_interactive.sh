@@ -121,3 +121,12 @@ if [ -d "/mnt/efs/$FLOAT_USER/.profile" ]; then
     sudo chmod 777 /mnt/efs/$FLOAT_USER/.profile
     sudo chgrp users /mnt/efs/$FLOAT_USER/.profile
 fi
+
+# This section will rename the files under /opt/share/.pixi/bin to point to the write location
+# This is so non-admin users will be able to use shared packages
+for file in /mnt/efs/shared/.pixi/bin/*; do
+    if [[ $(basename "$file") == "pixi" ]]; then
+        continue
+    fi
+    sed -i 's|/home/ubuntu|/opt/shared|g' "$file"
+done

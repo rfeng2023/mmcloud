@@ -83,6 +83,7 @@ fi
 # Function to check if a command is available
 export PATH="/home/$username/.pixi/bin":${PATH}
 source /home/$username/.bashrc
+echo "PATH: $PATH"
 
 is_available() {
   command -v "$1" &> /dev/null
