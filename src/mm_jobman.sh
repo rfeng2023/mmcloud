@@ -77,6 +77,10 @@ no_fail="|| { command_failed=1; break; }"
 no_fail_parallel="--halt now,fail=1"
 declare -a extra_parameters=()
 
+# Default EBS sizes for image and root container
+imageVolSize=5
+rootVolSize=40
+
 while (( "$#" )); do
   case "$1" in
     -c)
@@ -578,7 +582,19 @@ EOF
             job_filename=${TMPDIR:-/tmp}/${script_file%.*}/$j.mmjob.sh
         fi
         printf "$job_script" > $job_filename 
-        full_cmd+="$float_executable submit -a $opcenter -i '$image' -j $job_filename -c $c_min$c_max -m $m_min$m_max --hostInit $script_dir/host_init_batch.sh --dirMap /mnt/efs:/mnt/efs --withRoot --vmPolicy $vm_policy_command $dataVolume_params $volume_params "
+        full_cmd+="$float_executable submit -a $opcenter \n\
+        -i '$image' \n\
+        -j $job_filename \n\
+        -c $c_min$c_max \n\
+        -m $m_min$m_max \n\
+        --hostInit $script_dir/host_init_batch.sh \n\
+        --dirMap /mnt/efs:/mnt/efs \n\
+        --withRoot \n\
+        --vmPolicy $vm_policy_command \n\
+        --imageVolSize $imageVolSize \n\
+        --rootVolSize $rootVolSize \n\
+        $dataVolume_params \n\
+        $volume_params"
 
         # Added extra parameters if given
         for param in "${extra_parameters[@]}"; do
