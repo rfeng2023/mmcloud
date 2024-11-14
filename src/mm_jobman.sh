@@ -593,6 +593,7 @@ EOF
         --vmPolicy $vm_policy_command \n\
         --imageVolSize $imageVolSize \n\
         --rootVolSize $rootVolSize \n\
+        --securityGroup sg-02867677e76635b25 \n\
         $dataVolume_params \n\
         $volume_params"
 
@@ -600,11 +601,6 @@ EOF
         for param in "${extra_parameters[@]}"; do
           full_cmd+="$param "
         done
-
-        # Check security groups
-        # Update hard-coded security group and gateway if no specific gateway given
-        securityGroup="sg-02867677e76635b25"
-        full_cmd+="--securityGroup $securityGroup "
 
         full_cmd=${full_cmd%\ }
 

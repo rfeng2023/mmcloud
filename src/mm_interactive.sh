@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # Default values for parameters
-OP_IP="44.222.241.133"
+opcenter="44.222.241.133"
 s3_path="s3://statfungen/ftp_fgc_xqtl"
 vm_path="/data/"
 image="quay.io/danielnachun/tmate-minimal"
@@ -24,7 +24,7 @@ job_name=""
 no_mount=false
 additional_mounts=()
 publish_set=false
-gateway="" # Default will be set later, as it depends on OP_IP
+gateway="" # Default will be set later, as it depends on OPCENTER
 image_vol_size=""
 root_vol_size=""
 oem_admin=""
@@ -34,7 +34,7 @@ shared_admin=""
 usage() {
     echo "Usage: $0 [options]"
     echo "Options:"
-    echo "  -o, --OP_IP <ip>                 Set the OP IP address"
+    echo "  -o, --opcenter <ip>                 Set the OP IP address"
     echo "  -u, --user <username>            Set the username"
     echo "  -p, --password <password>        Set the password"
     echo "  -s3, --s3_path <path>            Set the S3 path"
@@ -63,7 +63,7 @@ usage() {
 # Parse command line options
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        -o|--OP_IP) OP_IP="$2"; shift ;;
+        -o|--opcenter) opcenter="$2"; shift ;;
         -u|--user) user="$2"; shift ;;
         -p|--password) password="$2"; shift ;;
         -s3|--s3_path) s3_path="$2"; shift ;;
@@ -127,13 +127,17 @@ fi
 
 # Update hard-coded security group and gateway if no specific gateway given
 securityGroup="sg-02867677e76635b25"
-if [[ "$OP_IP" == "3.82.198.55" ]]; then
+if [[ "$opcenter" == "3.82.198.55" ]]; then
     if [[ -z "$gateway" ]]; then
         gateway="g-4nntvdipikat0673xagju"
     fi
-elif [[ "$OP_IP" == "44.222.241.133" ]]; then
+elif [[ "$opcenter" == "44.222.241.133" ]]; then
     if [[ -z "$gateway" ]]; then
         gateway="g-9xahbrb5rkbs0ic8yzylk"
+    fi
+    # Updated gateway for vscode servers
+    if [[ $ide == "vscode" ]]; then
+        gateway="g-sidlpgb7oi9p48kxycpmn"
     fi
 fi
 
@@ -147,10 +151,10 @@ fi
 
 # Prompt for user and password if not provided
 if [[ -z "$user" ]]; then
-    read -p "Enter user for $OP_IP: " user
+    read -p "Enter user for $opcenter: " user
 fi
 if [[ -z "$password" ]]; then
-    read -sp "Enter password for $OP_IP: " password
+    read -sp "Enter password for $opcenter: " password
     echo ""
 fi
 
@@ -201,12 +205,11 @@ function find_script_dir() {
 script_dir=$(find_script_dir)
 
 # Log in
-echo "Logging in to $OP_IP"
-"$float_executable" login -a "$OP_IP" -u "$user" -p "$password"
+"$float_executable" login -a "$opcenter" -u "$user" -p "$password"
 
 # Build the float submit command as an array
 float_submit_args=(
-    "$float_executable" "submit" "-a" "$OP_IP"
+    "$float_executable" "submit" "-a" "$opcenter"
     "-i" "$image" "-c" "$core" "-m" "$mem"
     "--vmPolicy" "$vm_policy_command"
     "--gateway" "$gateway"
@@ -296,8 +299,9 @@ if [[ -n "$running_jobs" ]]; then
 fi
 
 # Display the float submit command
-echo ""
-echo -e "[Float submit command]: ${float_submit_args[*]}"
+echo "#-------------"
+echo -e "${float_submit_args[*]}"
+echo "#-------------"
 
 # Submit the job and retrieve job ID
 # Execute or echo the full command
@@ -389,13 +393,13 @@ case "$ide" in
     rstudio)
         IP_ADDRESS=$(get_public_ip "$jobid")
         echo "To access RStudio Server, navigate to http://$IP_ADDRESS in your web browser."
-        echo "Please give the instance about 10 minutes to start RStudio"
+        echo "Please give the instance about 5 minutes to start RStudio"
         echo "RStudio Server URL: http://$IP_ADDRESS" > "${jobid}_rstudio.log"
         ;;
     vscode)
         IP_ADDRESS=$(get_public_ip "$jobid")
         echo "To access code-server, navigate to http://$IP_ADDRESS in your web browser."
-        echo "Please give the instance about 10 minutes to start code-server"
+        echo "Please give the instance about 5 minutes to start vscode"
         echo "code-server URL: http://$IP_ADDRESS" > "${jobid}_code-server.log"
         ;;
     *)
