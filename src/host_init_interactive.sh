@@ -122,8 +122,8 @@ if [ -d "/mnt/efs/$FLOAT_USER/.profile" ]; then
     sudo chgrp users /mnt/efs/$FLOAT_USER/.profile
 fi
 
-# This section will rename the files under /opt/share/.pixi/bin to point to the write location
+# This section will rename the files under /opt/share/.pixi/bin/trampoline_configuration to point to the right location
 # This is so non-admin users will be able to use shared packages
-for file in /mnt/efs/shared/.pixi/bin/trampoline_configuration/*; do
+for file in /mnt/efs/shared/.pixi/bin/trampoline_configuration/*.json; do
     sed -i 's|/home/ubuntu/.pixi|/opt/shared/.pixi|g' "$file"
 done
