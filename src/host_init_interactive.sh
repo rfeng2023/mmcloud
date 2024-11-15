@@ -124,9 +124,6 @@ fi
 
 # This section will rename the files under /opt/share/.pixi/bin to point to the write location
 # This is so non-admin users will be able to use shared packages
-for file in /mnt/efs/shared/.pixi/bin/*; do
-    if [[ $(basename "$file") == "pixi" ]]; then
-        continue
-    fi
-    sed -i 's|/home/ubuntu|/opt/shared|g' "$file"
+for file in /mnt/efs/shared/.pixi/bin/trampoline_configuration/*; do
+    sed -i 's|/home/ubuntu/.pixi|/opt/shared/.pixi|g' "$file"
 done
