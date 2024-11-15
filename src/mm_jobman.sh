@@ -599,7 +599,7 @@ EOF
 
         # Added extra parameters if given
         for param in "${extra_parameters[@]}"; do
-          full_cmd+="$param "
+          full_cmd+=" $param"
         done
 
         full_cmd=${full_cmd%\ }
