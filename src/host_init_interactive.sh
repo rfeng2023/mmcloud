@@ -18,6 +18,12 @@ sleep 10s
 # Make the directories if it does not exist already
 # Reason why for so many if statements is to allow for new directories
 # to be made without relying on if the user exists
+if [ ! -d "/opt/shared" ]; then
+    sudo mkdir -p /opt/shared
+    sudo chown -R mmc /opt/shared
+    sudo chmod -R 777 /opt/shared
+    sudo chgrp -R users /opt/shared
+fi
 if [ ! -d "/mnt/efs/$FLOAT_USER/" ]; then
     sudo mkdir -p /mnt/efs/$FLOAT_USER
     sudo chown -R mmc /mnt/efs/$FLOAT_USER
@@ -115,3 +121,9 @@ if [ -d "/mnt/efs/$FLOAT_USER/.profile" ]; then
     sudo chmod 777 /mnt/efs/$FLOAT_USER/.profile
     sudo chgrp users /mnt/efs/$FLOAT_USER/.profile
 fi
+
+# This section will rename the files under /opt/share/.pixi/bin/trampoline_configuration to point to the right location
+# This is so non-admin users will be able to use shared packages
+for file in /mnt/efs/shared/.pixi/bin/trampoline_configuration/*.json; do
+    sed -i 's|/home/ubuntu/.pixi|/opt/shared/.pixi|g' "$file"
+done

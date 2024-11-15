@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # Default values for parameters
-OP_IP="44.222.241.133"
+opcenter="44.222.241.133"
 s3_path="s3://statfungen/ftp_fgc_xqtl"
 vm_path="/data/"
 image="quay.io/danielnachun/tmate-minimal"
@@ -15,6 +15,7 @@ vm_policy="onDemand"
 ide="tmate"
 mount_packages="false"
 float_executable="float"
+dryrun=false
 
 # Initialize other variables
 user=""
@@ -23,15 +24,17 @@ job_name=""
 no_mount=false
 additional_mounts=()
 publish_set=false
-gateway="" # Default will be set later, as it depends on OP_IP
+gateway="" # Default will be set later, as it depends on OPCENTER
 image_vol_size=""
 root_vol_size=""
+oem_admin=""
+shared_admin=""
 
 # Function to display usage information
 usage() {
     echo "Usage: $0 [options]"
     echo "Options:"
-    echo "  -o, --OP_IP <ip>                 Set the OP IP address"
+    echo "  -o, --opcenter <ip>                 Set the OP IP address"
     echo "  -u, --user <username>            Set the username"
     echo "  -p, --password <password>        Set the password"
     echo "  -s3, --s3_path <path>            Set the S3 path"
@@ -51,13 +54,16 @@ usage() {
     echo "  --mount-packages                 Mount dedicated volumes on AWS to accommodate conda package installation and usage"
     echo "  --float-executable <path>        Set the path to the float executable (default: float)"
     echo "  -g, --gateway <id>               Set gatewayID (default: default gateway on corresponding OpCenter)"
+    echo "  --oem-admin                      Run in admin mode to make changes to OEM packages"
+    echo "  --shared-admin                   Run in admin mode to make changes to shared packages"
+    echo "  --dryrun                         Execute a dry run, printing commands without running them."
     echo "  -h, --help                       Display this help message"
 }
 
 # Parse command line options
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        -o|--OP_IP) OP_IP="$2"; shift ;;
+        -o|--opcenter) opcenter="$2"; shift ;;
         -u|--user) user="$2"; shift ;;
         -p|--password) password="$2"; shift ;;
         -s3|--s3_path) s3_path="$2"; shift ;;
@@ -78,6 +84,9 @@ while [[ "$#" -gt 0 ]]; do
         --float-executable) float_executable="$2"; shift ;;
         -g|--gateway) gateway="$2"; shift ;;
         -h|--help) usage; exit 0 ;;
+        --oem-admin) oem_admin=true ;;
+        --shared-admin) shared_admin=true ;;
+        --dryrun) dryrun=true ;;
         *) echo "Unknown parameter passed: $1"; usage; exit 1 ;;
     esac
     shift
@@ -117,15 +126,18 @@ done
 fi
 
 # Update hard-coded security group and gateway if no specific gateway given
-if [[ "$OP_IP" == "3.82.198.55" ]]; then
-    securityGroup="sg-00c7a6c97b097ec7b"
+securityGroup="sg-02867677e76635b25"
+if [[ "$opcenter" == "3.82.198.55" ]]; then
     if [[ -z "$gateway" ]]; then
         gateway="g-4nntvdipikat0673xagju"
     fi
-elif [[ "$OP_IP" == "44.222.241.133" ]]; then
-    securityGroup="sg-02867677e76635b25"
+elif [[ "$opcenter" == "44.222.241.133" ]]; then
     if [[ -z "$gateway" ]]; then
         gateway="g-9xahbrb5rkbs0ic8yzylk"
+    fi
+    # Updated gateway for vscode servers
+    if [[ $ide == "vscode" ]]; then
+        gateway="g-sidlpgb7oi9p48kxycpmn"
     fi
 fi
 
@@ -139,10 +151,10 @@ fi
 
 # Prompt for user and password if not provided
 if [[ -z "$user" ]]; then
-    read -p "Enter user for $OP_IP: " user
+    read -p "Enter user for $opcenter: " user
 fi
 if [[ -z "$password" ]]; then
-    read -sp "Enter password for $OP_IP: " password
+    read -sp "Enter password for $opcenter: " password
     echo ""
 fi
 
@@ -193,12 +205,11 @@ function find_script_dir() {
 script_dir=$(find_script_dir)
 
 # Log in
-echo "Logging in to $OP_IP"
-"$float_executable" login -a "$OP_IP" -u "$user" -p "$password"
+"$float_executable" login -a "$opcenter" -u "$user" -p "$password"
 
 # Build the float submit command as an array
 float_submit_args=(
-    "$float_executable" "submit" "-a" "$OP_IP"
+    "$float_executable" "submit" "-a" "$opcenter"
     "-i" "$image" "-c" "$core" "-m" "$mem"
     "--vmPolicy" "$vm_policy_command"
     "--gateway" "$gateway"
@@ -226,11 +237,36 @@ if [[ ! -z "$root_vol_size" ]]; then
     )
 fi
 
+if [[ "${oem_admin}" == "true" && ${shared_admin} == "true" ]]; then
+    echo -e "${RED}ERROR: only one of --oem-admin and --shared-admin can be specificied"; exit 1
+fi
+
+if [[ "${oem_admin}" == "true" || ${shared_admin} == "true" ]] && [[ ${mount_packages} == "false" ]]; then
+    echo -e "${RED}ERROR: --mount-packages must be specified when --oem-admin or --shared-admin are specified"; exit 1
+fi
+
+host_script="host_init_interactive.sh"
+if [[ "${oem_admin}" == "true" ]]; then
+    float_submit_args+=(
+        "--env" "MODE=oem_admin"
+    )
+    host_script="host_init_batch.sh"
+elif [[ "${shared_admin}" == "true" ]]; then
+    float_submit_args+=(
+        "--env" "MODE=shared_admin"
+    )
+else 
+    float_submit_args+=(
+        "--env" "MODE=user"
+        "--dirMap" "/opt/shared:/opt/shared"
+    )
+fi
+
 # Add host-init and mount-init if specified
 if [[ "$mount_packages" == "true" ]]; then
     float_submit_args+=(
         "-j" "$script_dir/bind_mount.sh"
-        "--hostInit" "$script_dir/host_init.sh"
+        "--hostInit" "$script_dir/${host_script}"
         "--dirMap" "/mnt/efs:/mnt/efs"
         "-n" "$job_name"
     )
@@ -263,11 +299,18 @@ if [[ -n "$running_jobs" ]]; then
 fi
 
 # Display the float submit command
-echo -e "[Float submit command]: ${float_submit_args[*]}"
+echo "#-------------"
+echo -e "${float_submit_args[*]}"
+echo "#-------------"
 
 # Submit the job and retrieve job ID
-float_submit_output=$(echo "yes" | "${float_submit_args[@]}")
-jobid=$(echo "$float_submit_output" | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}' || true)
+# Execute or echo the full command
+if [ "$dryrun" = true ]; then
+    exit 0
+else
+    float_submit_output=$(echo "yes" | "${float_submit_args[@]}")
+    jobid=$(echo "$float_submit_output" | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}' || true)
+fi
 if [[ -z "$jobid" ]]; then
     echo "Error returned from float submission command! Exiting..."
     exit 1
@@ -350,13 +393,13 @@ case "$ide" in
     rstudio)
         IP_ADDRESS=$(get_public_ip "$jobid")
         echo "To access RStudio Server, navigate to http://$IP_ADDRESS in your web browser."
-        echo "Please give the instance about 10 minutes to start RStudio"
+        echo "Please give the instance about 5 minutes to start RStudio"
         echo "RStudio Server URL: http://$IP_ADDRESS" > "${jobid}_rstudio.log"
         ;;
     vscode)
         IP_ADDRESS=$(get_public_ip "$jobid")
         echo "To access code-server, navigate to http://$IP_ADDRESS in your web browser."
-        echo "Please give the instance about 10 minutes to start code-server"
+        echo "Please give the instance about 5 minutes to start vscode"
         echo "code-server URL: http://$IP_ADDRESS" > "${jobid}_code-server.log"
         ;;
     *)

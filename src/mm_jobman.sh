@@ -12,8 +12,7 @@ show_help() {
     echo "  --upload <local>:<remote>                 Upload folders to S3. Format: <local path>:<S3 path> (optional)."
     echo "  --download-include '<value>'              Use the include flag to include certain files for download (space-separated) (optional)."
     echo "  --dryrun                                  Execute a dry run, printing commands without running them."
-    echo "  --entrypoint '<command>'                  Set the initial command to run in the job script (required)."
-    echo "  --image <value>                           Specify the Docker image to use for the job (required)."
+    echo "  --image <value>                           Specify the Docker image to use for the job (default: quay.io/danielnachun/tmate-minimal)."
     echo "  --vm-policy <spotOnly|onDemand|spotFirst> Specify On-demand or Spot instance (default: spotFirst)".
     echo "  --job-size <value>                        Set the number of commands per job for creating virtual machines (required)."
     echo "  --mount <bucket>:<local>                  Mount an S3 bucket to a local directory. Format: <bucket>:<local path> (optional)."
@@ -28,6 +27,18 @@ show_help() {
     echo "  --help                                    Show this help message."
 }
 
+function find_script_dir() {
+    SOURCE=${BASH_SOURCE[0]}
+    while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+        DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+        SOURCE=$(readlink "$SOURCE")
+        [[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+    done
+    DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+    echo $DIR
+}
+script_dir=$(find_script_dir)
+
 # Check if at least one argument is provided
 if [ "$#" -eq 0 ]; then
     show_help
@@ -41,10 +52,10 @@ m_min=""
 m_max=""
 vm_policy="spotOnly"
 declare -a mountOpt=()
-image=""
-entrypoint=""
+image="quay.io/danielnachun/tmate-minimal"
 cwd="~"
 job_size=""
+securityGroup=""
 opcenter="3.82.198.55"
 float_executable="float"
 parallel_commands=""
@@ -65,6 +76,10 @@ dryrun=false
 no_fail="|| { command_failed=1; break; }"
 no_fail_parallel="--halt now,fail=1"
 declare -a extra_parameters=()
+
+# Default EBS sizes for image and root container
+imageVolSize=5
+rootVolSize=40
 
 while (( "$#" )); do
   case "$1" in
@@ -97,10 +112,6 @@ while (( "$#" )); do
       ;;
     --image)
       image="$2"
-      shift 2
-      ;;
-    --entrypoint)
-      entrypoint="$2"
       shift 2
       ;;
     --opcenter)
@@ -220,10 +231,6 @@ check_required_params() {
     fi
     if [ -z "$m_min" ]; then
         missing_params+="-m, "
-        is_missing=true
-    fi
-    if [ -z "$image" ]; then
-        missing_params+="--image, "
         is_missing=true
     fi
     if [ -z "$job_size" ]; then
@@ -518,11 +525,14 @@ submit_each_line_with_mmfloat() {
 
 set -o errexit -o pipefail
 
+# Symlink /mnt/efs/oem folders to \${HOME} to make software available
+username=\$(whoami)
+ln -sf /mnt/efs/oem/.pixi /home/\${username}/.pixi
+ln -sf /mnt/efs/oem/micromamba /home/\${username}/micromamba
+export PATH="\${HOME}/.pixi/bin:\${PATH}"
+
 # Function definition for calculate_max_parallel_jobs
 ${calculate_max_parallel_jobs_def}
-
-# Activate environment with entrypoint in job script
-${entrypoint}
 
 # Create directories if they don't exist for download
 ${download_mkdir}
@@ -572,12 +582,26 @@ EOF
             job_filename=${TMPDIR:-/tmp}/${script_file%.*}/$j.mmjob.sh
         fi
         printf "$job_script" > $job_filename 
-        full_cmd+="$float_executable submit -a $opcenter -i '$image' -j $job_filename -c $c_min$c_max -m $m_min$m_max --vmPolicy $vm_policy_command $dataVolume_params $volume_params "
+        full_cmd+="$float_executable submit -a $opcenter \n\
+        -i '$image' \n\
+        -j $job_filename \n\
+        -c $c_min$c_max \n\
+        -m $m_min$m_max \n\
+        --hostInit $script_dir/host_init_batch.sh \n\
+        --dirMap /mnt/efs:/mnt/efs \n\
+        --withRoot \n\
+        --vmPolicy $vm_policy_command \n\
+        --imageVolSize $imageVolSize \n\
+        --rootVolSize $rootVolSize \n\
+        --securityGroup sg-02867677e76635b25 \n\
+        $dataVolume_params \n\
+        $volume_params"
 
         # Added extra parameters if given
         for param in "${extra_parameters[@]}"; do
-          full_cmd+="$param "
+          full_cmd+=" $param"
         done
+
         full_cmd=${full_cmd%\ }
 
         # Execute or echo the full command
@@ -601,7 +625,6 @@ main() {
         echo "#mountOpt value: $mountOpt"
         echo "#image value: $image"
         echo "#opcenter value: $opcenter"
-        echo "#entrypoint value: $entrypoint"
         echo "#cwd value: $cwd"
         echo "#job-size: $job_size"
         echo "#parallel-commands: $parallel_commands"
