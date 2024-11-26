@@ -29,6 +29,7 @@ image_vol_size=""
 root_vol_size=""
 oem_admin=""
 shared_admin=""
+idle_time=7200
 
 # Function to display usage information
 usage() {
@@ -54,6 +55,7 @@ usage() {
     echo "  --mount-packages                 Mount dedicated volumes on AWS to accommodate conda package installation and usage"
     echo "  --float-executable <path>        Set the path to the float executable (default: float)"
     echo "  -g, --gateway <id>               Set gatewayID (default: default gateway on corresponding OpCenter)"
+    echo "  --idle                           Amount of idle time before suspension. Only works for jupyter instances (default: 7200 seconds)"
     echo "  --oem-admin                      Run in admin mode to make changes to OEM packages"
     echo "  --shared-admin                   Run in admin mode to make changes to shared packages"
     echo "  --dryrun                         Execute a dry run, printing commands without running them."
@@ -82,6 +84,7 @@ while [[ "$#" -gt 0 ]]; do
         -jn|--job_name) job_name="$2"; shift ;;
         --mount-packages) mount_packages="true" ;;
         --float-executable) float_executable="$2"; shift ;;
+        --idle) idle_time="$2"; shift ;;
         -g|--gateway) gateway="$2"; shift ;;
         -h|--help) usage; exit 0 ;;
         --oem-admin) oem_admin=true ;;
@@ -223,6 +226,7 @@ float_submit_args=(
     "--env" "JUPYTER_ENABLE_LAB=TRUE"
     "--env" "VMUI=$ide"
     "${dataVolumeOption[@]}"
+    "--env" "ALLOWABLE_IDLE_TIME_SECONDS=$idle_time"
 )
 
 # If image vol size and root vol size not empty, populate float args
