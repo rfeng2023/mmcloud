@@ -227,7 +227,6 @@ float_submit_args=(
     "--env" "VMUI=$ide"
     "${dataVolumeOption[@]}"
     "--env" "ALLOWABLE_IDLE_TIME_SECONDS=$idle_time"
-    "--subnet" "subnet-0527eb4604ecdfdde"
 )
 
 # If image vol size and root vol size not empty, populate float args
