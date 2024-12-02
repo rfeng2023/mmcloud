@@ -417,7 +417,8 @@ def main_process():
         sys.exit(1)
 
     # Construct the API URLs
-    base_api_url = f"{public_ip}:8888"
+    # base_api_url = f"{public_ip}:8888"
+    base_api_url = "http://127.0.0.1:8888"
     kernels_api_url = f"{base_api_url}/api/kernels"
     sessions_api_url = f"{base_api_url}/api/sessions"
     data['api_url'] = base_api_url
