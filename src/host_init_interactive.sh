@@ -194,10 +194,10 @@ max_jupyter_pid_attempts = int(os.getenv('MAX_JUPYTER_PID_ATTEMPTS', '20'))
 jupyter_pid_retry_interval_seconds = int(os.getenv('JUPYTER_PID_RETRY_INTERVAL_SECONDS', '60'))  # Default to 1 minute
 
 # Maximum preparation stage time before automatic suspension
-max_preparation_stage_time_seconds = int(os.getenv('MAX_PREPARATION_STAGE_TIME_SECONDS', '7200')) # Default to 2 hours
+max_preparation_stage_time_seconds = int(os.getenv('MAX_PREPARATION_STAGE_TIME_SECONDS', '1800'))  
 
-# Maximum log file size in bytes (e.g., 10KB)
-max_log_file_size_bytes = int(os.getenv('MAX_LOG_FILE_SIZE_BYTES', '10240'))  # Default to 10KB
+# Maximum log file size in bytes (e.g., 10MB)
+max_log_file_size_bytes = int(os.getenv('MAX_LOG_FILE_SIZE_BYTES', '10240000'))  # Default to 10MB
 
 # Maximum number of log files to keep
 max_log_files = int(os.getenv('MAX_LOG_FILES', '10'))
@@ -290,10 +290,9 @@ def main_process():
             else:
                 log_message(f"Container not yet started, waiting {container_check_retry_interval_seconds} seconds before retrying...")
                 time.sleep(container_check_retry_interval_seconds)
-        except subprocess.CalledProcessError as e:
-            log_message(f"Error checking container status: {e.stderr.strip()}")
-            data['action'] = 'Error checking container status, exiting.'
-            sys.exit(1)    
+        except subprocess.CalledProcessError:
+            log_message(f"Error checking container status, waiting {container_check_retry_interval_seconds} seconds before retrying...")
+            time.sleep(container_check_retry_interval_seconds)
 
     if not container_ready:
         data['action'] = 'Container not running after maximum attempts. Exiting.'
@@ -417,8 +416,9 @@ def main_process():
         sys.exit(1)
 
     # Construct the API URLs
-    # base_api_url = f"{public_ip}:8888"
+    #base_api_url = f"{public_ip}:8888"
     base_api_url = "http://127.0.0.1:8888"
+
     kernels_api_url = f"{base_api_url}/api/kernels"
     sessions_api_url = f"{base_api_url}/api/sessions"
     data['api_url'] = base_api_url
@@ -442,11 +442,11 @@ def main_process():
         data['current_time'] = current_time.isoformat()
 
         # Calculate elapsed time since script started
-        elapsed_time = current_time - start_time
+        elapsed_time = current_time - start_time # elapsed_time is a datetime.timedelta object
         data['elapsed_time_since_start'] = str(elapsed_time)
 
         # Check if preparation stage time has exceeded maximum allowed time
-        if preparation_stage and elapsed_time > timedelta(seconds=max_preparation_stage_time_seconds):
+        if preparation_stage and elapsed_time > timedelta(seconds=max_preparation_stage_time_seconds): # must add timedelta, otherwise TypeError
             preparation_stage = False
             log_message("Preparation stage time exceeded maximum allowed time. Exiting preparation stage.")
             # Execute suspend command immediately
@@ -487,10 +487,10 @@ def main_process():
                 json.dump(data_to_save, f, indent=4)
 
             # Since we've suspended the job, we can exit the script
-            sys.exit(0)
+            sys.exit(0) # The program will terminate here, so saving the data needs to be completed before exiting.
 
         # Initialize skip_idle_check flag
-        skip_idle_check = False
+        skip_idle_check = False # when we will execute this line, when elapsed_time is less than max_preparation_stage_time_seconds
 
         # Call the kernels API using curl
         try:
@@ -529,7 +529,7 @@ def main_process():
             sys.exit(1)
 
         # Get notebook relative paths from sessions
-        notebook_relative_paths = [session['notebook']['path'] for session in data.get('sessions', [])]
+        notebook_relative_paths = [session['notebook']['path'] for session in data.get('sessions', [])] # check the json output log file to better understand this line
         data['notebook_relative_paths_from_sessionAPI'] = notebook_relative_paths
 
         if notebook_relative_paths:
@@ -566,6 +566,7 @@ def main_process():
                 jupyter_working_directory = None
             else:
                 # Get the Jupyter working directory
+                # you also can use pwdx comamnd to display the current working directory of each process.
                 try:
                     cmd = [
                         'sudo', 'podman', 'exec', container_id, 'bash', '-c',
@@ -600,7 +601,9 @@ def main_process():
                 data['notebook_paths'] = notebook_paths
 
                 # Retrieve modification timestamps of notebooks
+                # A list to store the modification timestamps (as datetime objects) of all the notebooks found in the Jupyter working directory
                 modification_times = []
+                # A list containing multiple dictionaries. Each dictionary represents information about a notebook file, including file path and modification time.
                 notebook_modification_times = []
                 for notebook_path in notebook_paths:
                     try:
@@ -612,15 +615,21 @@ def main_process():
                         )
                         timestamp_str = result.stdout.strip()
                         if timestamp_str:
+                            # Convert a UNIX timestamp string into a datetime object
+                            # The int(timestamp_str) converts the timestamp_str (a string representation of a UNIX timestamp) into an integer.
+                            # datetime.fromtimestamp(...) converts the UNIX timestamp (seconds since the epoch, typically January 1, 1970) into a Python datetime object.
+                            # The tz=timezone.utc argument ensures that the resulting datetime object is in UTC time.
                             timestamp = datetime.fromtimestamp(int(timestamp_str), tz=timezone.utc)
                             modification_times.append(timestamp)
+                            # isoparse(timestamp.isoformat()) converts the datetime object back to an ISO 8601 string.
+                            # For example, convert "2024, 11, 1, 12, 30, 45" to "2024-11-01T12:30:45+00:00".
                             notebook_modification_times.append({
                                 'path': notebook_path,
                                 'modification_time': timestamp.isoformat()
                             })
                     except subprocess.CalledProcessError as e:
                         log_message(f"Failed to get modification time for {notebook_path}: {e.stderr.strip()}")
-
+                # Assigns the notebook_modification_times list to the key 'notebook_modification_times' in the data dictionary.
                 data['notebook_modification_times'] = notebook_modification_times
 
                 # Find the most recent modification time
@@ -699,8 +708,8 @@ def main_process():
             # Proceed with idle time check
             # Decide which time to use for idle time calculation
             times_to_compare = []
-            if last_activity_time:
-                times_to_compare.append(last_activity_time)  # datetime object
+            # if last_activity_time:
+            #     times_to_compare.append(last_activity_time)  # datetime object
             if data.get('last_notebook_modified_time'):
                 last_notebook_modified_time = isoparse(data['last_notebook_modified_time'])  # parse to datetime
                 times_to_compare.append(last_notebook_modified_time)
