@@ -146,7 +146,7 @@ from dateutil.parser import isoparse
 # Configuration variables
 
 # Docker image name
-docker_image_name = "docker.io/yiweizh/rockefeller-jupyter:latest"
+docker_image_name = "quay.io/danielnachun/tmate-minimal"
 
 # Paths and filenames
 base_path = '/tmp/'  # Base path for storing files
