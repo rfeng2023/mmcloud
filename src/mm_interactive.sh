@@ -30,6 +30,7 @@ root_vol_size=""
 oem_admin=""
 shared_admin=""
 idle_time=7200
+suspend_off=""
 
 # Function to display usage information
 usage() {
@@ -56,6 +57,7 @@ usage() {
     echo "  --float-executable <path>        Set the path to the float executable (default: float)"
     echo "  -g, --gateway <id>               Set gatewayID (default: default gateway on corresponding OpCenter)"
     echo "  --idle                           Amount of idle time before suspension. Only works for jupyter instances (default: 7200 seconds)"
+    echo "  --suspend-off                    For Jupyter jobs, turn off the auto-suspension feature"
     echo "  --oem-admin                      Run in admin mode to make changes to OEM packages"
     echo "  --shared-admin                   Run in admin mode to make changes to shared packages"
     echo "  --dryrun                         Execute a dry run, printing commands without running them."
@@ -90,6 +92,7 @@ while [[ "$#" -gt 0 ]]; do
         --oem-admin) oem_admin=true ;;
         --shared-admin) shared_admin=true ;;
         --dryrun) dryrun=true ;;
+        --suspend-off) suspend_off=true ;;
         *) echo "Unknown parameter passed: $1"; usage; exit 1 ;;
     esac
     shift
@@ -272,6 +275,14 @@ if [[ "$mount_packages" == "true" ]]; then
         "--hostInit" "$script_dir/${host_script}"
         "--dirMap" "/mnt/efs:/mnt/efs"
         "-n" "$job_name"
+    )
+fi
+
+# If suspend_on is empty, suspension feature is on
+# If it is populated, turn off suspension with an env variable
+if [[ "$suspend_off" == "true" ]]; then
+    float_submit_args+=(
+        "--env" "SUSPEND_FEATURE=false"
     )
 fi
 

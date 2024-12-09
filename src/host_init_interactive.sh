@@ -123,8 +123,9 @@ for file in /mnt/efs/shared/.pixi/bin/trampoline_configuration/*.json; do
 done
 
 ######## SECTION ON JUPYTER SUSPENSION ########
-if [[ $VMUI == "jupyter" ]] || [[ $VMUI == "jupyter-lab" ]]; then
+if [[ $SUSPEND_FEATURE == "" ]] && { [[ $VMUI == "jupyter" ]] || [[ $VMUI == "jupyter-lab" ]]; }; then
     # Use nohup to run the Python script in the background
+    echo "Turning on Jupyter suspension feature..."
     nohup python3 - << 'EOF' > /tmp/python_output.log 2>&1 &
 
 import subprocess
