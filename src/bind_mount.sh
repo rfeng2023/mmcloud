@@ -78,9 +78,15 @@ else
     echo -e "ERROR: invalid mode specified - must be one of oem_admin, shared_admin or user"
 fi
 
+# Update bashrc to remove /opt/shared and replace with /mnt/efs/shared
+if grep -Fxq 'export PATH="/opt/shared/.pixi/bin:${PATH}"' ~/.bashrc; then
+    echo "/opt/shared exists in .bashrc. Updating the path..."
+    sed -i 's|/opt/shared|/mnt/efs/shared|g' ~/.bashrc
+    echo "Path updated to use /mnt/efs/shared."
+fi
+
 # Run the original entrypoint script
 # Function to check if a command is available
-export PATH="/home/$username/.pixi/bin":${PATH}
 source /home/$username/.bashrc
 echo "PATH: $PATH"
 
