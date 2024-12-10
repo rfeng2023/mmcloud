@@ -44,7 +44,7 @@ link_paths() {
         # Set a basic .bashrc and .profile if efs does not have them
         if [ ! -f ${efs_path}/.bashrc ]; then
             tee ${efs_path}/.bashrc << EOF
-export PATH="/opt/shared/.pixi/bin:\${PATH}"
+export PATH="/mnt/efs/shared/.pixi/bin:\${PATH}"
 export PATH="\${HOME}/.pixi/bin:\${PATH}"
 unset PYTHONPATH
 export PYDEVD_DISABLE_FILE_VALIDATION=1
@@ -74,14 +74,19 @@ elif [[ ${MODE} == "shared_admin" ]]; then
     link_paths /mnt/efs/shared /home/${username} minimal
 elif [[ ${MODE} == "user" ]]; then
     link_paths /mnt/efs/${FLOAT_USER} /home/${username} full
-    link_paths /mnt/efs/shared /opt/shared minimal
 else
     echo -e "ERROR: invalid mode specified - must be one of oem_admin, shared_admin or user"
 fi
 
+# Update bashrc to remove /opt/shared and replace with /mnt/efs/shared
+if grep -Fxq 'export PATH="/opt/shared/.pixi/bin:${PATH}"' ~/.bashrc; then
+    echo "/opt/shared exists in .bashrc. Updating the path..."
+    sed -i 's|/opt/shared|/mnt/efs/shared|g' ~/.bashrc
+    echo "Path updated to use /mnt/efs/shared."
+fi
+
 # Run the original entrypoint script
 # Function to check if a command is available
-export PATH="/home/$username/.pixi/bin":${PATH}
 source /home/$username/.bashrc
 echo "PATH: $PATH"
 
