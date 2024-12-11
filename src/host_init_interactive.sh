@@ -126,7 +126,15 @@ done
 if [[ $SUSPEND_FEATURE == "" ]] && { [[ $VMUI == "jupyter" ]] || [[ $VMUI == "jupyter-lab" ]]; }; then
     # Use nohup to run the Python script in the background
     echo "Turning on Jupyter suspension feature..."
-    nohup python3 - << 'EOF' > /tmp/python_output.log 2>&1 &
+
+    # Use nohup to run the Python script in the background
+    # Grabbing job id of the job
+    job_id=$(echo $FLOAT_JOB_ID)
+    splitted="${job_id:0:2}/${job_id:2:2}/${job_id:4}"
+    BASE_PATH="/mnt/memverge/slurm/work/$splitted"
+
+    echo "BASEPATH: $BASE_PATH"
+    nohup python3 - << 'EOF' > $BASE_PATH/python_output.log 2>&1 &
 
 import subprocess
 import sys
@@ -144,134 +152,89 @@ from dateutil.parser import isoparse
 docker_image_name = "quay.io/danielnachun/tmate-minimal"
 
 # Paths and filenames
-base_path = '/tmp/'  # Base path for storing files
+job_id=str(os.getenv("FLOAT_JOB_ID"))
+splitted_job_id=f"{job_id[:2]}/{job_id[2:4]}/{job_id[4:]}"
+base_path=f"/mnt/memverge/slurm/work/{splitted_job_id}/"
 
-# Generate timestamp for log file names
 timestamp_str = datetime.now().strftime("%Y%m%d%H%M%S")
 log_file_name = f'monitor_log_{timestamp_str}.txt'
 output_json_name = 'output.json'
 
-# First-time run wait time in seconds
-first_time_run_wait_time_seconds = int(os.getenv('FIRST_TIME_RUN_WAIT_TIME_SECONDS', '60'))  # Default to 1 minute
-
-# Container check retry interval in seconds
-container_check_retry_interval_seconds = int(os.getenv('CONTAINER_CHECK_RETRY_INTERVAL_SECONDS', '60'))  # Default to 1 minute
-
-# Maximum attempts to check for container readiness and file existence
+first_time_run_wait_time_seconds = int(os.getenv('FIRST_TIME_RUN_WAIT_TIME_SECONDS', '60'))
+container_check_retry_interval_seconds = int(os.getenv('CONTAINER_CHECK_RETRY_INTERVAL_SECONDS', '60'))
 max_container_check_attempts = int(os.getenv('MAX_CONTAINER_CHECK_ATTEMPTS', '20'))
 max_file_check_attempts = int(os.getenv('MAX_FILE_CHECK_ATTEMPTS', '20'))
-
-# File existence check retry interval in seconds
-file_check_retry_interval_seconds = int(os.getenv('FILE_CHECK_RETRY_INTERVAL_SECONDS', '60'))  # Default to 1 minute
-
-# Maximum attempts to find the token
+file_check_retry_interval_seconds = int(os.getenv('FILE_CHECK_RETRY_INTERVAL_SECONDS', '60'))
 max_token_find_attempts = int(os.getenv('MAX_TOKEN_FIND_ATTEMPTS', '20'))
-
-# Token find retry interval in seconds
-token_find_retry_interval_seconds = int(os.getenv('TOKEN_FIND_RETRY_INTERVAL_SECONDS', '60'))  # Default to 1 minute
-
-# Allowable idle time before suspending job
-allowable_idle_time_seconds = int(os.getenv('ALLOWABLE_IDLE_TIME_SECONDS', '7200'))  # Default to 2 hours
-
-# Maximum suspend attempts
+token_find_retry_interval_seconds = int(os.getenv('TOKEN_FIND_RETRY_INTERVAL_SECONDS', '60'))
+allowable_idle_time_seconds = int(os.getenv('ALLOWABLE_IDLE_TIME_SECONDS', '7200'))                 # Default 2 hours
 max_suspend_attempts = int(os.getenv('MAX_SUSPEND_ATTEMPTS', '3'))
-
-# Sleep time between suspend attempts in seconds
-sleep_time_between_suspend_attempts = int(os.getenv('SLEEP_TIME_BETWEEN_SUSPEND_ATTEMPTS', '60'))  # Default to 1 minute
-
-# Idle check interval in seconds
-idle_check_interval_seconds = int(os.getenv('IDLE_CHECK_INTERVAL_SECONDS', '60'))  # Default to 1 minute
-
-# Maximum attempts to get Jupyter PID
+sleep_time_between_suspend_attempts = int(os.getenv('SLEEP_TIME_BETWEEN_SUSPEND_ATTEMPTS', '60'))
+idle_check_interval_seconds = int(os.getenv('IDLE_CHECK_INTERVAL_SECONDS', '60'))
 max_jupyter_pid_attempts = int(os.getenv('MAX_JUPYTER_PID_ATTEMPTS', '20'))
-
-# Jupyter PID check retry interval in seconds
-jupyter_pid_retry_interval_seconds = int(os.getenv('JUPYTER_PID_RETRY_INTERVAL_SECONDS', '60'))  # Default to 1 minute
-
-# Maximum preparation stage time before automatic suspension
-max_preparation_stage_time_seconds = int(os.getenv('MAX_PREPARATION_STAGE_TIME_SECONDS', '1800'))  
-
-# Maximum log file size in bytes (e.g., 10MB)
-max_log_file_size_bytes = int(os.getenv('MAX_LOG_FILE_SIZE_BYTES', '10240000'))  # Default to 10MB
-
-# Maximum number of log files to keep
+jupyter_pid_retry_interval_seconds = int(os.getenv('JUPYTER_PID_RETRY_INTERVAL_SECONDS', '60'))
+max_preparation_stage_time_seconds = int(os.getenv('MAX_PREPARATION_STAGE_TIME_SECONDS', '1800'))   # Default 30 min
+max_log_file_size_bytes = int(os.getenv('MAX_LOG_FILE_SIZE_BYTES', '10240000'))
 max_log_files = int(os.getenv('MAX_LOG_FILES', '10'))
 
-# Ensure the base_path exists
 os.makedirs(base_path, exist_ok=True)
 
-# Initialize the data dictionary with some default values
+# Initialize the data dictionary
 data = {
     'status': 'initializing',
     'container_id': None,
     'FLOAT_JOB_ID': None,
     'public_ip': None,
     'token': None,
-    'last_activity_time': None,
     'last_notebook_modified_time': None,
     'idle_time': None,
     'action': 'starting_monitoring'
 }
 
-# Open a log file for writing messages
+data['base_path'] = base_path
+
 log_file_path = os.path.join(base_path, log_file_name)
 log_file = open(log_file_path, 'a')
 
-# Function to log messages to the file
 def log_message(message):
     global log_file, log_file_path
-
     timestamp = datetime.now(timezone.utc).isoformat()
 
-    # Check the size of the log file
     if os.path.isfile(log_file_path):
         log_file_size = os.path.getsize(log_file_path)
         if log_file_size >= max_log_file_size_bytes:
-            # Close current log file
             log_file.close()
-            # Rename the log file with timestamp
             timestamp_str = datetime.now().strftime("%Y%m%d%H%M%S")
             new_log_file_name = f"monitor_log_{timestamp_str}.txt"
             new_log_file_path = os.path.join(base_path, new_log_file_name)
             os.rename(log_file_path, new_log_file_path)
-            # Open a new log file
             log_file = open(log_file_path, 'a')
-            # Manage log files to keep at most max_log_files
-            # Get list of log files excluding the current one
             log_files = [f for f in os.listdir(base_path) if f.startswith('monitor_log_') and f.endswith('.txt') and f != os.path.basename(log_file_path)]
             if len(log_files) > max_log_files:
-                # Sort the log files by name (since the timestamp in the name is sortable)
                 log_files.sort()
-                # Delete the oldest files
                 files_to_delete = log_files[:-max_log_files]
                 for file_name in files_to_delete:
                     os.remove(os.path.join(base_path, file_name))
 
-    # Write the log message
     log_file.write(f"{timestamp} - {message}\n")
     log_file.flush()
 
-# Write the initial data to output.json
 output_json_path = os.path.join(base_path, output_json_name)
 with open(output_json_path, 'w') as f:
     json.dump(data, f, indent=4)
 
 def main_process():
-    # Record the script start time
     start_time = datetime.now(timezone.utc)
     data['script_start_time'] = start_time.isoformat()
 
-    # Wait until the container is running
-    # **First-time run logic**
     from time import sleep
     print("First-time run detected. Waiting for 1 minute before proceeding...")
-    sleep(first_time_run_wait_time_seconds)  # Wait for the configured time
+    sleep(first_time_run_wait_time_seconds)
 
     container_ready = False
     attempts = 0
     while not container_ready and attempts < max_container_check_attempts:
         attempts += 1
-        # Check if the container is running
         try:
             result = subprocess.run(
                 ['sudo', 'podman', 'ps', '--filter', f'ancestor={docker_image_name}', '--format', '{{.ID}}'],
@@ -296,7 +259,6 @@ def main_process():
             json.dump(data, f, indent=4)
         sys.exit(1)
 
-    # Function to get environment variables from the container
     def get_env_var(var_name):
         try:
             result = subprocess.run(
@@ -307,23 +269,16 @@ def main_process():
         except subprocess.CalledProcessError:
             return ''
 
-    # Retrieve FLOAT_JOB_ID
     float_job_id = get_env_var('FLOAT_JOB_ID')
     data['FLOAT_JOB_ID'] = float_job_id
-
-    # Format the FLOAT_JOB_ID with slashes
     formatted_float_job_id = f"{float_job_id[:2]}/{float_job_id[2:4]}/{float_job_id[4:]}"
     data['formatted_FLOAT_JOB_ID'] = formatted_float_job_id
-
-    # Construct the file path
     file_path = f"/mnt/memverge/slurm/work/{formatted_float_job_id}/stderr.autosave"
     data['file_path'] = file_path
 
-    # Update output.json after retrieving environment variables
     with open(output_json_path, 'w') as f:
         json.dump(data, f, indent=4)
 
-    # Loop to wait for the stderr.autosave file to exist
     file_exists = False
     attempts = 0
     while not file_exists and attempts < max_file_check_attempts:
@@ -342,12 +297,10 @@ def main_process():
         data['jupyter_url'] = None
         data['token'] = None
         log_message("stderr.autosave file not found after maximum attempts. Exiting.")
-        # Update output.json
         with open(output_json_path, 'w') as f:
             json.dump(data, f, indent=4)
         sys.exit(1)
     else:
-        # Loop to wait for the token to appear in the file
         token_found = False
         attempts = 0
         while not token_found and attempts < max_token_find_attempts:
@@ -358,12 +311,10 @@ def main_process():
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True
                 )
                 content = result.stdout
-                # Use regex to find the URL
                 match = re.search(r'(http://[^ ]*/lab\?token=[a-zA-Z0-9]+)', content)
                 if match:
                     url = match.group(1)
                     data['jupyter_url'] = url
-                    # Extract the token from the URL
                     token_match = re.search(r'token=([a-zA-Z0-9]+)', url)
                     if token_match:
                         token = token_match.group(1)
@@ -387,17 +338,13 @@ def main_process():
         if not token_found:
             data['action'] = 'Token not found after maximum attempts.'
             log_message("Token not found after maximum attempts. Exiting.")
-            # Update output.json
             with open(output_json_path, 'w') as f:
                 json.dump(data, f, indent=4)
             sys.exit(1)
 
-    # Update output.json with the new data
     with open(output_json_path, 'w') as f:
         json.dump(data, f, indent=4)
 
-    # Continue only if the token was found
-    # Get the public IP
     try:
         result = subprocess.run(['curl', '-s', 'ifconfig.me'], stdout=subprocess.PIPE, text=True, check=True)
         public_ip = result.stdout.strip()
@@ -405,46 +352,34 @@ def main_process():
     except subprocess.CalledProcessError as e:
         data['public_ip'] = None
         log_message("Failed to get public IP. Exiting.")
-        # Update output.json
         with open(output_json_path, 'w') as f:
             json.dump(data, f, indent=4)
         sys.exit(1)
 
-    # Construct the API URLs
-    #base_api_url = f"{public_ip}:8888"
     base_api_url = "http://127.0.0.1:8888"
-
     kernels_api_url = f"{base_api_url}/api/kernels"
     sessions_api_url = f"{base_api_url}/api/sessions"
     data['api_url'] = base_api_url
-
-    # Save the curl commands used to call the APIs
     data['kernels_curl_command'] = f"curl -sSLG {kernels_api_url} --data-urlencode 'token={data['token']}'"
     data['sessions_curl_command'] = f"curl -sSLG {sessions_api_url} --data-urlencode 'token={data['token']}'"
 
-    # Update output.json with the new data
     with open(output_json_path, 'w') as f:
         json.dump(data, f, indent=4)
 
-    # Initialize preparation_stage to True and timestamp_from_latest_busy_status_check to None
-    preparation_stage = True # Only set to False within while loop.
+    preparation_stage = True
     data['timestamp_from_latest_busy_status_check'] = None
 
-    # Start the monitoring loop
+    data['timestamp_from_latest_terminal_having_Child_Job_running_status_check'] = None
+
     while True:
-        # Get current time
         current_time = datetime.now(timezone.utc)
         data['current_time'] = current_time.isoformat()
-
-        # Calculate elapsed time since script started
-        elapsed_time = current_time - start_time # elapsed_time is a datetime.timedelta object
+        elapsed_time = current_time - start_time
         data['elapsed_time_since_start'] = str(elapsed_time)
 
-        # Check if preparation stage time has exceeded maximum allowed time
-        if preparation_stage and elapsed_time > timedelta(seconds=max_preparation_stage_time_seconds): # must add timedelta, otherwise TypeError
+        if preparation_stage and elapsed_time > timedelta(seconds=max_preparation_stage_time_seconds):
             preparation_stage = False
             log_message("Preparation stage time exceeded maximum allowed time. Exiting preparation stage.")
-            # Execute suspend command immediately
             float_job_id = data.get('FLOAT_JOB_ID')
             os.environ["HOME"] = "/root"
             cmd = ['/opt/memverge/bin/float', 'suspend', '-f', '-j', float_job_id]
@@ -463,7 +398,7 @@ def main_process():
                         data['action'] = 'Suspended job due to exceeding preparation stage time.'
                         log_message(f"Suspend attempt {suspend_attempts}: Suspended job due to exceeding preparation stage time.")
                         suspend_successful = True
-                        break  # Exit the loop
+                        break
                     else:
                         log_message(f"Suspend attempt {suspend_attempts}: Suspend command did not return success message. Retrying in {sleep_time_between_suspend_attempts} seconds...")
                         time.sleep(sleep_time_between_suspend_attempts)
@@ -476,69 +411,96 @@ def main_process():
                 data['action'] = 'Failed to suspend job after maximum attempts.'
                 log_message("Failed to suspend job after maximum attempts.")
 
-            # Save the collected data to a JSON file
             data_to_save = data.copy()
             with open(output_json_path, 'w') as f:
                 json.dump(data_to_save, f, indent=4)
+            sys.exit(0)
 
-            # Since we've suspended the job, we can exit the script
-            sys.exit(0) # The program will terminate here, so saving the data needs to be completed before exiting.
+        skip_idle_check = False
 
-        # Initialize skip_idle_check flag
-        skip_idle_check = False # when we will execute this line, when elapsed_time is less than max_preparation_stage_time_seconds
-
-        # Call the kernels API using curl
         try:
             result = subprocess.run(
                 ['curl', '-sSLG', kernels_api_url, '--data-urlencode', f"token={data['token']}"],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True
             )
             kernels_json_output = result.stdout
-            # Save the output to a JSON file
             kernels_json_path = os.path.join(base_path, 'kernels.json')
             with open(kernels_json_path, 'w') as f:
                 f.write(kernels_json_output)
-            # Include kernels data in the main JSON
             data['kernels'] = json.loads(kernels_json_output)
         except subprocess.CalledProcessError as e:
             data['kernels'] = None
             log_message("Failed to fetch kernels. Exiting.")
             sys.exit(1)
 
-        # Call the sessions API to get notebook paths
         try:
             result = subprocess.run(
                 ['curl', '-sSLG', sessions_api_url, '--data-urlencode', f"token={data['token']}"],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True
             )
             sessions_json_output = result.stdout
-            # Save the output to a JSON file
             sessions_json_path = os.path.join(base_path, 'sessions.json')
             with open(sessions_json_path, 'w') as f:
                 f.write(sessions_json_output)
-            # Include sessions data in the main JSON
             data['sessions'] = json.loads(sessions_json_output)
         except subprocess.CalledProcessError as e:
             data['sessions'] = None
             log_message("Failed to fetch sessions. Exiting.")
             sys.exit(1)
 
-        # Get notebook relative paths from sessions
-        notebook_relative_paths = [session['notebook']['path'] for session in data.get('sessions', [])] # check the json output log file to better understand this line
+        # Check terminals
+        terminals_api_url = f"{base_api_url}/api/terminals"
+        try:
+            result = subprocess.run(
+                ['curl', '-sSLG', terminals_api_url, '--data-urlencode', f"token={data['token']}"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True
+            )
+            terminals_json_output = result.stdout.strip()
+            data['terminals'] = json.loads(terminals_json_output)
+        except subprocess.CalledProcessError as e:
+            data['terminals'] = []
+            log_message("Failed to fetch terminals. Assuming no terminals.")
+
+        terminal_child_running = False
+        if data['terminals']:
+            cmd = f"""
+            sudo podman exec {container_id} sh -c '
+            ps -ef --forest | awk "
+            /\\/usr\\/bin\\/sh -l/ {{parent_pids[\\$2] = 1}}
+            {{
+                if (\\$3 in parent_pids) {{
+                print \\$2;
+                exit;
+                }}
+            }}
+            "
+            '
+            """
+
+            result = subprocess.run(cmd, shell=True, text=True, capture_output=True)
+            ps_output = result.stdout.replace(" ", "")
+
+            if ps_output != "":
+                terminal_child_running = True
+                current_time = datetime.now(timezone.utc)
+                data['timestamp_from_latest_terminal_having_Child_Job_running_status_check'] = current_time.isoformat()
+                log_message("Detected child job in running, updated timestamp_from_latest_terminal_having_Child_Job_running_status_check.")
+        else:
+            data['terminals'] = []
+            data['timestamp_from_latest_terminal_having_Child_Job_running_status_check'] = None
+
+        notebook_relative_paths = [session['notebook']['path'] for session in data.get('sessions', [])]
         data['notebook_relative_paths_from_sessionAPI'] = notebook_relative_paths
 
         if notebook_relative_paths:
-            # Try to get the Jupyter PID and working directory
             jupyter_pid = None
             jupyter_working_directory = None
-
-            # Try to get the Jupyter PID
             pid_attempts = 0
             while not jupyter_pid and pid_attempts < max_jupyter_pid_attempts:
                 pid_attempts += 1
                 try:
                     cmd = [
-                        'sudo', 'podman', 'exec', container_id, 'bash', '-c',
+                        'sudo', 'podman', 'exec', data['container_id'], 'bash', '-c',
                         "ps -ef | grep 'jupyter-lab' | grep -v grep | awk '{print $2}'"
                     ]
                     result = subprocess.run(
@@ -560,18 +522,15 @@ def main_process():
                 data['action'] = 'Failed to find Jupyter PID'
                 jupyter_working_directory = None
             else:
-                # Get the Jupyter working directory
-                # you also can use pwdx comamnd to display the current working directory of each process.
                 try:
                     cmd = [
-                        'sudo', 'podman', 'exec', container_id, 'bash', '-c',
+                        'sudo', 'podman', 'exec', data['container_id'], 'bash', '-c',
                         f'ls -l /proc/{jupyter_pid}/cwd'
                     ]
                     result = subprocess.run(
                         cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True
                     )
                     output = result.stdout.strip()
-                    # The output is like: lrwxrwxrwx 1 jovyan users 0 Oct 23 22:05 /proc/739/cwd -> /home/jovyan/handson-tutorials/contents
                     match = re.search(r'-> (.*)', output)
                     if match:
                         jupyter_working_directory = match.group(1)
@@ -585,49 +544,36 @@ def main_process():
                     data['jupyter_working_directory'] = None
 
             if jupyter_working_directory:
-                # Combine working directory and relative paths to get absolute paths
                 notebook_paths = []
                 for relative_path in notebook_relative_paths:
-                    # Remove leading '/' if present
                     if relative_path.startswith('/'):
                         relative_path = relative_path[1:]
                     absolute_path = os.path.normpath(os.path.join(jupyter_working_directory, relative_path))
                     notebook_paths.append(absolute_path)
                 data['notebook_paths'] = notebook_paths
 
-                # Retrieve modification timestamps of notebooks
-                # A list to store the modification timestamps (as datetime objects) of all the notebooks found in the Jupyter working directory
                 modification_times = []
-                # A list containing multiple dictionaries. Each dictionary represents information about a notebook file, including file path and modification time.
                 notebook_modification_times = []
                 for notebook_path in notebook_paths:
                     try:
                         cmd = [
-                            'sudo', 'podman', 'exec', container_id, 'stat', '-c', '%Y', notebook_path
+                            'sudo', 'podman', 'exec', data['container_id'], 'stat', '-c', '%Y', notebook_path
                         ]
                         result = subprocess.run(
                             cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True
                         )
                         timestamp_str = result.stdout.strip()
                         if timestamp_str:
-                            # Convert a UNIX timestamp string into a datetime object
-                            # The int(timestamp_str) converts the timestamp_str (a string representation of a UNIX timestamp) into an integer.
-                            # datetime.fromtimestamp(...) converts the UNIX timestamp (seconds since the epoch, typically January 1, 1970) into a Python datetime object.
-                            # The tz=timezone.utc argument ensures that the resulting datetime object is in UTC time.
                             timestamp = datetime.fromtimestamp(int(timestamp_str), tz=timezone.utc)
                             modification_times.append(timestamp)
-                            # isoparse(timestamp.isoformat()) converts the datetime object back to an ISO 8601 string.
-                            # For example, convert "2024, 11, 1, 12, 30, 45" to "2024-11-01T12:30:45+00:00".
                             notebook_modification_times.append({
                                 'path': notebook_path,
                                 'modification_time': timestamp.isoformat()
                             })
                     except subprocess.CalledProcessError as e:
                         log_message(f"Failed to get modification time for {notebook_path}: {e.stderr.strip()}")
-                # Assigns the notebook_modification_times list to the key 'notebook_modification_times' in the data dictionary.
                 data['notebook_modification_times'] = notebook_modification_times
 
-                # Find the most recent modification time
                 if modification_times:
                     last_notebook_modified_time = max(modification_times)
                     data['last_notebook_modified_time'] = last_notebook_modified_time.isoformat()
@@ -648,84 +594,60 @@ def main_process():
         # Process kernels
         kernels = data.get('kernels', [])
 
-        last_activity_time = None
-
-        # Check if any kernels have connections > 0 or execution_state == 'busy'
+       
         any_kernel_active = False
         for kernel in kernels:
-            connections = kernel.get('connections', 0)
             execution_state = kernel.get('execution_state')
-            if connections > 0 or execution_state == 'busy':
+            if execution_state == 'busy':
                 any_kernel_active = True
-                preparation_stage = False  # User has started working
-                break  # No need to check further
+                preparation_stage = False
+                break
 
-        # If in preparation stage and no kernels are active
+        if preparation_stage and data['terminals'] and terminal_child_running:
+            preparation_stage = False
+
         if preparation_stage:
-            data['action'] = 'Preparation stage: no action taken since no connection and no busy detection, elapsed time is less than max_preparation_stage_time_seconds.'
-            log_message("Preparation stage: no action taken since no connection and no busy detection, elapsed time is less than max_preparation_stage_time_seconds.")
-            skip_idle_check = True  # Skip idle check
-
+            data['action'] = 'Preparation stage: no action taken since no busy detection, elapsed time is less than max_preparation_stage_time_seconds.'
+            log_message("Preparation stage: no action taken since no busy detection, elapsed time is less than max_preparation_stage_time_seconds.")
+            skip_idle_check = True
         else:
-            # Check if any of the kernels are busy
             any_kernel_busy = any(kernel.get('execution_state') == 'busy' for kernel in kernels)
 
             if any_kernel_busy:
-                # Update the timestamp_from_latest_busy_status_check to the current time
                 data['timestamp_from_latest_busy_status_check'] = current_time.isoformat()
                 data['action'] = 'At least one kernel is busy; no action taken.'
                 log_message("At least one kernel is busy; no action taken.")
-                skip_idle_check = True  # Set flag to skip idle time check
+                skip_idle_check = True
             else:
-                # Proceed to check idle time based on last activity
-                # Extract last_activity from all kernels
-                for kernel in kernels:
-                    last_activity = kernel.get('last_activity')
-                    if last_activity:
-                        last_activity_datetime = isoparse(last_activity)
-                        kernel['last_activity_datetime'] = last_activity_datetime.isoformat()
-                        kernel['_last_activity_datetime_obj'] = last_activity_datetime
-                    else:
-                        kernel['last_activity_datetime'] = None
-                        kernel['_last_activity_datetime_obj'] = datetime.min.replace(tzinfo=timezone.utc)
+                if terminal_child_running:
+                    data['action'] = 'At least one terminal child process is running; no action taken.'
+                    log_message("At least one terminal child process is running; no action taken.")
+                    skip_idle_check = True
 
-                # Get the most recent last_activity_time among all kernels
-                last_activity_times = [kernel.get('_last_activity_datetime_obj') for kernel in kernels if kernel.get('_last_activity_datetime_obj')]
-                if last_activity_times:
-                    last_activity_time = max(last_activity_times)
-                    data['last_activity_time'] = last_activity_time.isoformat()
-                else:
-                    last_activity_time = None
-                    data['last_activity_time'] = None
-                skip_idle_check = False
+               
 
         if not skip_idle_check:
-            # Proceed with idle time check
-            # Decide which time to use for idle time calculation
             times_to_compare = []
-            # if last_activity_time:
-            #     times_to_compare.append(last_activity_time)  # datetime object
+
             if data.get('last_notebook_modified_time'):
-                last_notebook_modified_time = isoparse(data['last_notebook_modified_time'])  # parse to datetime
+                last_notebook_modified_time = isoparse(data['last_notebook_modified_time'])
                 times_to_compare.append(last_notebook_modified_time)
             if data.get('timestamp_from_latest_busy_status_check'):
                 timestamp_busy = isoparse(data['timestamp_from_latest_busy_status_check'])
                 times_to_compare.append(timestamp_busy)
 
+            if data.get('timestamp_from_latest_terminal_having_Child_Job_running_status_check'):
+                timestamp_terminal_job = isoparse(data['timestamp_from_latest_terminal_having_Child_Job_running_status_check'])
+                times_to_compare.append(timestamp_terminal_job)
+
             if times_to_compare:
-                # Get the most recent time
                 latest_time = max(times_to_compare)
                 data['used_time_for_idle_check'] = latest_time.isoformat()
-
-                # Calculate time difference
                 time_diff = current_time - latest_time
                 data['idle_time'] = str(time_diff)
-
-                # Allowable idle time
                 allowable_idle_time = timedelta(seconds=allowable_idle_time_seconds)
 
                 if time_diff > allowable_idle_time:
-                    # Now execute the suspend command with retry logic
                     float_job_id = data.get('FLOAT_JOB_ID')
                     os.environ["HOME"] = "/root"
                     cmd = ['/opt/memverge/bin/float', 'suspend', '-f', '-j', float_job_id]
@@ -744,7 +666,7 @@ def main_process():
                                 data['action'] = 'Suspended job due to inactivity.'
                                 log_message(f"Suspend attempt {suspend_attempts}: Suspended job due to inactivity.")
                                 suspend_successful = True
-                                break  # Exit the loop
+                                break
                             else:
                                 log_message(f"Suspend attempt {suspend_attempts}: Suspend command did not return success message. Retrying in {sleep_time_between_suspend_attempts} seconds...")
                                 time.sleep(sleep_time_between_suspend_attempts)
@@ -757,43 +679,35 @@ def main_process():
                         data['action'] = 'Failed to suspend job after maximum attempts.'
                         log_message("Failed to suspend job after maximum attempts.")
                 else:
-                    data['action'] = 'Idle time not exceeded; will check again in 1 minute.'
-                    log_message("Idle time not exceeded; will check again in 1 minute.")
+                    time_diff_minutes = time_diff.total_seconds() / 60
+                    data['action'] = f"Idle time not exceeded; Current idle time is {int(time_diff_minutes)} minutes; will check again in 1 minute."
+                    log_message(f"Idle time not exceeded; Current idle time is {int(time_diff_minutes)} minutes; will check again in 1 minute.")
             else:
                 data['action'] = 'No activity or modification time available; will check again in 1 minute.'
                 log_message("No activity or modification time available; will check again in 1 minute.")
         else:
-            # Kernel is busy or in preparation stage, we skip idle time check
             pass
 
-        # Remove the datetime objects before saving to JSON
+
         for kernel in kernels:
             if '_last_activity_datetime_obj' in kernel:
                 del kernel['_last_activity_datetime_obj']
 
-        # Save the collected data to a JSON file
         data_to_save = data.copy()
         with open(output_json_path, 'w') as f:
             json.dump(data_to_save, f, indent=4)
 
-        # Wait for the next check
         time.sleep(idle_check_interval_seconds)
 
 def run_in_background():
     log_message("Starting main process in background...")
-    # Create a thread to run the main process
     thread = threading.Thread(target=main_process)
     thread.start()
     return thread
 
 if __name__ == "__main__":
-    # Run the background process
     thread = run_in_background()
-
-    # Wait for the background thread to finish
-    thread.join()  # Ensures the main process waits for the thread to complete before proceeding
-
-    # Close the log file after the thread completes its work
+    thread.join()
     log_file.close()
 
 EOF
