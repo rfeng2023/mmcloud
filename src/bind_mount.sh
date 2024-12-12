@@ -44,8 +44,7 @@ link_paths() {
         # Set a basic .bashrc and .profile if efs does not have them
         if [ ! -f ${efs_path}/.bashrc ]; then
             tee ${efs_path}/.bashrc << EOF
-export PATH="/mnt/efs/shared/.pixi/bin:\${PATH}"
-export PATH="\${HOME}/.pixi/bin:\${PATH}"
+export PATH="\${HOME}/.pixi/bin:/mnt/efs/shared/.pixi/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 unset PYTHONPATH
 export PYDEVD_DISABLE_FILE_VALIDATION=1
 EOF
