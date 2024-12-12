@@ -41,10 +41,14 @@ link_paths() {
         # Remove existing .bashrc and .profile
         rm ${local_path}/.bashrc ${local_path}/.profile
 
-        # Set a basic .bashrc and .profile if efs does not have them
-        if [ ! -f ${efs_path}/.bashrc ]; then
-            tee ${efs_path}/.bashrc << EOF
-export PATH="\${HOME}/.pixi/bin:/mnt/efs/shared/.pixi/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        # If bashrc does exist already AND if it has the source command, continue
+        if [[ -f "$efs_path/.bashrc" ]] && grep -qF "source \$HOME/.set_paths" "$efs_path/.bashrc"; then
+          echo -e ".bashrc exists and includes .set_paths. Continuing...\n"
+          continue
+        else
+          echo -e "Making new .bashrc...\n"
+          tee ${efs_path}/.bashrc << EOF
+source \$HOME/.set_paths
 unset PYTHONPATH
 export PYDEVD_DISABLE_FILE_VALIDATION=1
 EOF
@@ -65,6 +69,12 @@ EOF
         ln -s ${efs_path}/.profile ${local_path}/.profile
     fi
 }
+
+# Create a PATH script - does not need to be saved in EFS
+# (new every time for easy editing)
+tee ${HOME}/.set_paths << EOF
+export PATH="\${HOME}/.pixi/bin:/mnt/efs/shared/.pixi/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+EOF
 
 # Link necessary dirs and files
 if [[ ${MODE} == "oem_admin" ]]; then
