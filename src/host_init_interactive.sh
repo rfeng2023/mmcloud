@@ -173,7 +173,7 @@ sleep_time_between_suspend_attempts = int(os.getenv('SLEEP_TIME_BETWEEN_SUSPEND_
 idle_check_interval_seconds = int(os.getenv('IDLE_CHECK_INTERVAL_SECONDS', '60'))
 max_jupyter_pid_attempts = int(os.getenv('MAX_JUPYTER_PID_ATTEMPTS', '20'))
 jupyter_pid_retry_interval_seconds = int(os.getenv('JUPYTER_PID_RETRY_INTERVAL_SECONDS', '60'))
-max_preparation_stage_time_seconds = int(os.getenv('MAX_PREPARATION_STAGE_TIME_SECONDS', '1800'))   # Default 30 min
+max_preparation_stage_time_seconds = int(os.getenv('MAX_PREPARATION_STAGE_TIME_SECONDS', '7200'))   # Default 2 hours
 max_log_file_size_bytes = int(os.getenv('MAX_LOG_FILE_SIZE_BYTES', '10240000'))
 max_log_files = int(os.getenv('MAX_LOG_FILES', '10'))
 
