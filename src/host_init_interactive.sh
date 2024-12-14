@@ -103,6 +103,15 @@ if [ ! -d "/mnt/efs/$FLOAT_USER/.mambarc" ]; then
     sudo chgrp users /mnt/efs/$FLOAT_USER/.mambarc
 fi
 
+# For Github setup
+if [ ! -d "/mnt/efs/$FLOAT_USER/GIT" ]; then
+    # A file, not a directory
+    sudo touch /mnt/efs/$FLOAT_USER/GIT
+    sudo chown mmc /mnt/efs/$FLOAT_USER/GIT
+    sudo chmod 777 /mnt/efs/$FLOAT_USER/GIT
+    sudo chgrp users /mnt/efs/$FLOAT_USER/GIT
+fi
+
 # For bashrc and profile, if they do exist, make sure they have the right permissions
 # for this setup
 if [ -d "/mnt/efs/$FLOAT_USER/.bashrc" ]; then
@@ -189,6 +198,29 @@ data = {
     'last_notebook_modified_time': None,
     'idle_time': None,
     'action': 'starting_monitoring'
+}
+
+data['base_path'] = base_path
+
+log_file_path = os.path.join(base_path, log_file_name)
+log_file = open(log_file_path, 'a')
+
+data = {
+    'status': 'initializing',
+    'container_id': None,
+    'FLOAT_JOB_ID': None,
+    'public_ip': None,
+    'token': None,
+    'last_notebook_modified_time': None,
+    'idle_time': None,
+    'action': 'starting_monitoring',
+    'timestamp_from_latest_busy_status_check': None,
+    'timestamp_from_latest_terminal_having_Child_Job_running_status_check': None,
+    'last_activity_from_terminal': None,
+    'used_time_for_idle_check': None,
+    'time_diff': None,
+    'latest_time': None,
+    'latest_resume_time': None 
 }
 
 data['base_path'] = base_path
@@ -359,17 +391,18 @@ def main_process():
     base_api_url = "http://127.0.0.1:8888"
     kernels_api_url = f"{base_api_url}/api/kernels"
     sessions_api_url = f"{base_api_url}/api/sessions"
+    terminals_api_url = f"{base_api_url}/api/terminals"
     data['api_url'] = base_api_url
     data['kernels_curl_command'] = f"curl -sSLG {kernels_api_url} --data-urlencode 'token={data['token']}'"
     data['sessions_curl_command'] = f"curl -sSLG {sessions_api_url} --data-urlencode 'token={data['token']}'"
 
-    with open(output_json_path, 'w') as f:
-        json.dump(data, f, indent=4)
 
     preparation_stage = True
-    data['timestamp_from_latest_busy_status_check'] = None
 
-    data['timestamp_from_latest_terminal_having_Child_Job_running_status_check'] = None
+    latest_resume_datetime = datetime.now(timezone.utc)
+    data['latest_resume_time'] = latest_resume_datetime.isoformat()
+    with open(output_json_path, 'w') as f:
+        json.dump(data, f, indent=4)
 
     while True:
         current_time = datetime.now(timezone.utc)
@@ -414,6 +447,9 @@ def main_process():
             data_to_save = data.copy()
             with open(output_json_path, 'w') as f:
                 json.dump(data_to_save, f, indent=4)
+
+            
+
             sys.exit(0)
 
         skip_idle_check = False
@@ -448,8 +484,6 @@ def main_process():
             log_message("Failed to fetch sessions. Exiting.")
             sys.exit(1)
 
-        # Check terminals
-        terminals_api_url = f"{base_api_url}/api/terminals"
         try:
             result = subprocess.run(
                 ['curl', '-sSLG', terminals_api_url, '--data-urlencode', f"token={data['token']}"],
@@ -461,10 +495,11 @@ def main_process():
             data['terminals'] = []
             log_message("Failed to fetch terminals. Assuming no terminals.")
 
+        # Check if there's a running child job from terminals
         terminal_child_running = False
         if data['terminals']:
             cmd = f"""
-            sudo podman exec {container_id} sh -c '
+            sudo podman exec {data['container_id']} sh -c '
             ps -ef --forest | awk "
             /\\/usr\\/bin\\/sh -l/ {{parent_pids[\\$2] = 1}}
             {{
@@ -488,6 +523,18 @@ def main_process():
         else:
             data['terminals'] = []
             data['timestamp_from_latest_terminal_having_Child_Job_running_status_check'] = None
+
+        terminal_last_activity_list = []
+        for terminal in data['terminals']:
+            t_last_activity = terminal.get('last_activity')
+            if t_last_activity:
+                t_last_activity_datetime = isoparse(t_last_activity)
+                terminal_last_activity_list.append(t_last_activity_datetime)
+        if terminal_last_activity_list:
+            max_terminal_last_activity = max(terminal_last_activity_list)
+            data['last_activity_from_terminal'] = max_terminal_last_activity.isoformat()
+        else:
+            data['last_activity_from_terminal'] = None
 
         notebook_relative_paths = [session['notebook']['path'] for session in data.get('sessions', [])]
         data['notebook_relative_paths_from_sessionAPI'] = notebook_relative_paths
@@ -594,16 +641,17 @@ def main_process():
         # Process kernels
         kernels = data.get('kernels', [])
 
-       
+        # Check if any kernels are busy or have connections
         any_kernel_active = False
         for kernel in kernels:
+            connections = kernel.get('connections', 0)
             execution_state = kernel.get('execution_state')
-            if execution_state == 'busy':
+            if connections > 0 or execution_state == 'busy':
                 any_kernel_active = True
-                preparation_stage = False
+                preparation_stage = False  # User has started working
                 break
 
-        if preparation_stage and data['terminals'] and terminal_child_running:
+        if preparation_stage and (data['terminals'] or terminal_child_running):
             preparation_stage = False
 
         if preparation_stage:
@@ -624,14 +672,17 @@ def main_process():
                     log_message("At least one terminal child process is running; no action taken.")
                     skip_idle_check = True
 
-               
-
         if not skip_idle_check:
             times_to_compare = []
 
             if data.get('last_notebook_modified_time'):
                 last_notebook_modified_time = isoparse(data['last_notebook_modified_time'])
                 times_to_compare.append(last_notebook_modified_time)
+
+            if data.get('last_activity_from_terminal'):
+                terminal_last_activity_time = isoparse(data['last_activity_from_terminal'])
+                times_to_compare.append(terminal_last_activity_time)
+
             if data.get('timestamp_from_latest_busy_status_check'):
                 timestamp_busy = isoparse(data['timestamp_from_latest_busy_status_check'])
                 times_to_compare.append(timestamp_busy)
@@ -640,10 +691,16 @@ def main_process():
                 timestamp_terminal_job = isoparse(data['timestamp_from_latest_terminal_having_Child_Job_running_status_check'])
                 times_to_compare.append(timestamp_terminal_job)
 
+            if data.get('latest_resume_time'):
+                latest_resume_time_dt = isoparse(data['latest_resume_time'])
+                times_to_compare.append(latest_resume_time_dt)
+
             if times_to_compare:
                 latest_time = max(times_to_compare)
+                data['latest_time'] = latest_time.isoformat()
                 data['used_time_for_idle_check'] = latest_time.isoformat()
                 time_diff = current_time - latest_time
+                data['time_diff'] = str(time_diff)
                 data['idle_time'] = str(time_diff)
                 allowable_idle_time = timedelta(seconds=allowable_idle_time_seconds)
 
@@ -685,9 +742,6 @@ def main_process():
             else:
                 data['action'] = 'No activity or modification time available; will check again in 1 minute.'
                 log_message("No activity or modification time available; will check again in 1 minute.")
-        else:
-            pass
-
 
         for kernel in kernels:
             if '_last_activity_datetime_obj' in kernel:
@@ -696,6 +750,8 @@ def main_process():
         data_to_save = data.copy()
         with open(output_json_path, 'w') as f:
             json.dump(data_to_save, f, indent=4)
+            
+        
 
         time.sleep(idle_check_interval_seconds)
 
