@@ -32,6 +32,7 @@ link_paths() {
         ln -s ${efs_path}/.mamba ${local_path}/.mamba
         ln -s ${efs_path}/.local ${local_path}/.local
         ln -s ${efs_path}/.mambarc ${local_path}/.mambarc
+        ln -s ${efs_path}/ghq ${local_path}/ghq
     fi
 
     # If we are linking full paths, create a basic .bashrc and .profile if they don't exist on the EFS mount
