@@ -395,7 +395,6 @@ def main_process():
     data['kernels_curl_command'] = f"curl -sSLG {kernels_api_url} --data-urlencode 'token={data['token']}'"
     data['sessions_curl_command'] = f"curl -sSLG {sessions_api_url} --data-urlencode 'token={data['token']}'"
 
-
     preparation_stage = True
 
     latest_resume_datetime = datetime.now(timezone.utc)
@@ -441,13 +440,7 @@ def main_process():
 
             if not suspend_successful:
                 data['action'] = 'Failed to suspend job after maximum attempts.'
-                log_message("Failed to suspend job after maximum attempts.")
-
-            data_to_save = data.copy()
-            with open(output_json_path, 'w') as f:
-                json.dump(data_to_save, f, indent=4)
-
-            
+                log_message("Failed to suspend job after maximum attempts.") 
 
             sys.exit(0)
 
