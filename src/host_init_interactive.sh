@@ -105,11 +105,10 @@ fi
 
 # For Github setup
 if [ ! -d "/mnt/efs/$FLOAT_USER/ghq" ]; then
-    # A file, not a directory
-    sudo touch /mnt/efs/$FLOAT_USER/ghq
-    sudo chown mmc /mnt/efs/$FLOAT_USER/ghq
-    sudo chmod 777 /mnt/efs/$FLOAT_USER/ghq
-    sudo chgrp users /mnt/efs/$FLOAT_USER/ghq
+    sudo mkdir -p /mnt/efs/$FLOAT_USER/ghq
+    sudo chown -R mmc /mnt/efs/$FLOAT_USER/ghq
+    sudo chmod -R 777 /mnt/efs/$FLOAT_USER/ghq
+    sudo chgrp -R users /mnt/efs/$FLOAT_USER/ghq
 fi
 
 # For bashrc and profile, if they do exist, make sure they have the right permissions
