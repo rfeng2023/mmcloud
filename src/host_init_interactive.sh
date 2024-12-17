@@ -105,11 +105,11 @@ fi
 
 # For Github setup
 if [ ! -d "/mnt/efs/$FLOAT_USER/ghq" ]; then
-    # A file, not a directory
-    sudo touch /mnt/efs/$FLOAT_USER/ghq
-    sudo chown mmc /mnt/efs/$FLOAT_USER/ghq
-    sudo chmod 777 /mnt/efs/$FLOAT_USER/ghq
-    sudo chgrp users /mnt/efs/$FLOAT_USER/ghq
+    sudo mkdir -p /mnt/efs/$FLOAT_USER/ghq
+    sudo chown -R mmc /mnt/efs/$FLOAT_USER/ghq
+    sudo chmod -R 777 /mnt/efs/$FLOAT_USER/ghq
+    sudo chgrp -R users /mnt/efs/$FLOAT_USER/ghq
+fi
 
 # For bashrc and profile, if they do exist, make sure they have the right permissions
 # for this setup
@@ -395,7 +395,6 @@ def main_process():
     data['kernels_curl_command'] = f"curl -sSLG {kernels_api_url} --data-urlencode 'token={data['token']}'"
     data['sessions_curl_command'] = f"curl -sSLG {sessions_api_url} --data-urlencode 'token={data['token']}'"
 
-
     preparation_stage = True
 
     latest_resume_datetime = datetime.now(timezone.utc)
@@ -441,13 +440,7 @@ def main_process():
 
             if not suspend_successful:
                 data['action'] = 'Failed to suspend job after maximum attempts.'
-                log_message("Failed to suspend job after maximum attempts.")
-
-            data_to_save = data.copy()
-            with open(output_json_path, 'w') as f:
-                json.dump(data_to_save, f, indent=4)
-
-            
+                log_message("Failed to suspend job after maximum attempts.") 
 
             sys.exit(0)
 
