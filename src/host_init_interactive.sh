@@ -110,6 +110,7 @@ if [ ! -d "/mnt/efs/$FLOAT_USER/ghq" ]; then
     sudo chown mmc /mnt/efs/$FLOAT_USER/ghq
     sudo chmod 777 /mnt/efs/$FLOAT_USER/ghq
     sudo chgrp users /mnt/efs/$FLOAT_USER/ghq
+fi
 
 # For bashrc and profile, if they do exist, make sure they have the right permissions
 # for this setup
