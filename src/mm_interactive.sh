@@ -113,6 +113,7 @@ fi
 # If ide is tmate, warn user about initial package setup
 if [ $ide == "tmate" ]; then
     while true; do
+    echo ""
     echo -e "${RED}NOTICE:${NC} tmate sessions are primarily designed for initial package configuration.\nFor regular development work, we recommend utilizing a more advanced Integrated Development Environment (IDE)\nvia the -ide option, if you have previously set up an alternative IDE.\n\nDo you wish to proceed with the tmate session? (y/N): \c"
     read input
     input=${input:-n}  # Default to "n" if no input is given
@@ -253,15 +254,53 @@ if [[ "${oem_admin}" == "true" || ${shared_admin} == "true" ]] && [[ ${mount_pac
 fi
 
 host_script="host_init_interactive.sh"
-if [[ "${oem_admin}" == "true" ]]; then
-    float_submit_args+=(
-        "--env" "MODE=oem_admin"
-    )
-    host_script="host_init_batch.sh"
-elif [[ "${shared_admin}" == "true" ]]; then
-    float_submit_args+=(
-        "--env" "MODE=shared_admin"
-    )
+if [[ "${oem_admin}" == "true" ]]; then	
+    echo -e "${RED}WARNING: ${NC}If there are existing batch jobs running, updating packages in the batch setup could lead to checkpoint failures."
+    while true; do
+        echo -e "Do you wish to proceed (y/N)? \c"
+        read input
+        input=${input:-n}  # Default to "n" if no input is given
+        case $input in
+            [yY])
+                float_submit_args+=(
+                    "--env" "MODE=oem_admin"
+                )
+                host_script="host_init_batch.sh"
+                break
+                ;;
+            [nN]) 
+                # If warning is not accepted, exit the script
+                echo "Exiting the script."
+                exit 0
+                ;;
+            *) 
+                echo "Invalid input. Please enter 'y' or 'n'."
+                ;;
+        esac
+    done
+elif [[ "${shared_admin}" == "true" ]]; then  	
+    echo -e "${RED}WARNING: ${NC}If there are existing interactive jobs running, updating packages in the interactive setup could lead to checkpoint failures."
+    while true; do
+        echo -e "Do you wish to proceed (y/N)? \c"
+        read input
+        input=${input:-n}  # Default to "n" if no input is given
+        case $input in
+            [yY])
+                float_submit_args+=(
+                    "--env" "MODE=shared_admin"
+                )
+                break
+                ;;
+            [nN]) 
+                # If warning is not accepted, exit the script
+                echo "Exiting the script."
+                exit 0
+                ;;
+            *) 
+                echo "Invalid input. Please enter 'y' or 'n'."
+                ;;
+        esac
+    done
 else 
     float_submit_args+=(
         "--env" "MODE=user"
