@@ -255,52 +255,70 @@ fi
 
 host_script="host_init_interactive.sh"
 if [[ "${oem_admin}" == "true" ]]; then	
-    echo -e "${RED}WARNING: ${NC}If there are existing batch jobs running, updating packages in the batch setup could lead to checkpoint failures."
-    while true; do
-        echo -e "Do you wish to proceed (y/N)? \c"
-        read input
-        input=${input:-n}  # Default to "n" if no input is given
-        case $input in
-            [yY])
-                float_submit_args+=(
-                    "--env" "MODE=oem_admin"
-                )
-                host_script="host_init_batch.sh"
-                break
-                ;;
-            [nN]) 
-                # If warning is not accepted, exit the script
-                echo "Exiting the script."
-                exit 0
-                ;;
-            *) 
-                echo "Invalid input. Please enter 'y' or 'n'."
-                ;;
-        esac
-    done
-elif [[ "${shared_admin}" == "true" ]]; then  	
-    echo -e "${RED}WARNING: ${NC}If there are existing interactive jobs running, updating packages in the interactive setup could lead to checkpoint failures."
-    while true; do
-        echo -e "Do you wish to proceed (y/N)? \c"
-        read input
-        input=${input:-n}  # Default to "n" if no input is given
-        case $input in
-            [yY])
-                float_submit_args+=(
-                    "--env" "MODE=shared_admin"
-                )
-                break
-                ;;
-            [nN]) 
-                # If warning is not accepted, exit the script
-                echo "Exiting the script."
-                exit 0
-                ;;
-            *) 
-                echo "Invalid input. Please enter 'y' or 'n'."
-                ;;
-        esac
-    done
+    running_batch_jobs=$($float_executable list -a 3.82.198.55 -u $user -p $password -f "status=Executing or status=Floating or status=Suspended or status=Suspending or status=Starting or status=Initializing" | awk '{print $4}' | grep -v -e '^$' -e 'NAME' || true) 
+    if [[ ! -z $running_batch_jobs ]]; then
+        batch_job_count=$(echo "$running_batch_jobs" | wc -l)
+    else
+        batch_job_count=0
+    fi
+    if [[ $batch_job_count -gt 0 ]]; then
+        echo ""
+        echo -e "${RED}WARNING: ${NC}There are ${batch_job_count} batch jobs running. Updating packages in the batch setup could lead to checkpoint failures."
+        while true; do
+            echo -e "Do you wish to proceed (y/N)? \c"
+            read input
+            input=${input:-n}  # Default to "n" if no input is given
+            case $input in
+                [yY])
+                    break
+                    ;;
+                [nN]) 
+                    # If warning is not accepted, exit the script
+                    echo "Exiting the script."
+                    exit 0
+                    ;;
+                *) 
+                    echo "Invalid input. Please enter 'y' or 'n'."
+                    ;;
+            esac
+        done
+    fi
+    float_submit_args+=(
+    "--env" "MODE=oem_admin"
+    )
+    host_script="host_init_batch.sh"
+elif [[ "${shared_admin}" == "true" ]]; then
+    running_int_jobs=$($float_executable list -a 44.222.241.133 -f "status=Executing or status=Floating or status=Suspended or status=Suspending or status=Starting or status=Initializing" | awk '{print $4}' | grep -v -e '^$' -e 'NAME' || true)
+    if [[ ! -z $running_int_jobs ]]; then
+        int_job_count=$(echo "$running_int_jobs" | wc -l)
+    else
+        int_job_count=0
+    fi
+    if [[ $int_job_count -gt 0 ]]; then
+        echo ""
+        echo -e "${RED}WARNING: ${NC}There are ${int_job_count} interactive jobs running. Updating packages in the interactive setup could lead to checkpoint failures."
+        while true; do
+            echo -e "Do you wish to proceed (y/N)? \c"
+            read input
+            input=${input:-n}  # Default to "n" if no input is given
+            case $input in
+                [yY])
+                    break
+                    ;;
+                [nN]) 
+                    # If warning is not accepted, exit the script
+                    echo "Exiting the script."
+                    exit 0
+                    ;;
+                *) 
+                    echo "Invalid input. Please enter 'y' or 'n'."
+                    ;;
+            esac
+        done
+    fi
+    float_submit_args+=(
+    "--env" "MODE=shared_admin"
+    )
 else 
     float_submit_args+=(
         "--env" "MODE=user"
