@@ -100,6 +100,11 @@ fi
 source /home/$username/.bashrc
 echo "PATH: $PATH"
 
+# Run entrypoint if given
+if [[ ! -z "$ENTRYPOINT" ]]; then
+    ${ENTRYPOINT}
+fi
+
 is_available() {
   command -v "$1" &> /dev/null
 }

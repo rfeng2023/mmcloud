@@ -16,6 +16,7 @@ ide="tmate"
 mount_packages="false"
 float_executable="float"
 dryrun=false
+idle_time=7200
 
 # Initialize other variables
 user=""
@@ -29,14 +30,14 @@ image_vol_size=""
 root_vol_size=""
 oem_admin=""
 shared_admin=""
-idle_time=7200
 suspend_off=""
+entrypoint=""
 
 # Function to display usage information
 usage() {
     echo "Usage: $0 [options]"
     echo "Options:"
-    echo "  -o, --opcenter <ip>                 Set the OP IP address"
+    echo "  -o, --opcenter <ip>              Set the OP IP address"
     echo "  -u, --user <username>            Set the username"
     echo "  -p, --password <password>        Set the password"
     echo "  -s3, --s3_path <path>            Set the S3 path"
@@ -56,6 +57,7 @@ usage() {
     echo "  --mount-packages                 Mount dedicated volumes on AWS to accommodate conda package installation and usage"
     echo "  --float-executable <path>        Set the path to the float executable (default: float)"
     echo "  -g, --gateway <id>               Set gatewayID (default: default gateway on corresponding OpCenter)"
+    echo "  --entrypoint <dir>               Set entrypoint of interactive job"
     echo "  --idle                           Amount of idle time before suspension. Only works for jupyter instances (default: 7200 seconds)"
     echo "  --suspend-off                    For Jupyter jobs, turn off the auto-suspension feature"
     echo "  --oem-admin                      Run in admin mode to make changes to OEM packages"
@@ -88,6 +90,7 @@ while [[ "$#" -gt 0 ]]; do
         --float-executable) float_executable="$2"; shift ;;
         --idle) idle_time="$2"; shift ;;
         -g|--gateway) gateway="$2"; shift ;;
+        --entrypoint) entrypoint="$2"; shift ;;
         -h|--help) usage; exit 0 ;;
         --oem-admin) oem_admin=true ;;
         --shared-admin) shared_admin=true ;;
@@ -242,6 +245,13 @@ fi
 if [[ ! -z "$root_vol_size" ]]; then
     float_submit_args+=(
         "--rootVolSize" "$root_vol_size"
+    )
+fi
+
+# If entrypoint provided, add it
+if [[ ! -z "$entrypoint" ]]; then
+    float_submit_args+=(
+        "--env" "ENTRYPOINT=$entrypoint"
     )
 fi
 
