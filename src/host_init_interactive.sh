@@ -1,6 +1,10 @@
 #!/bin/bash
 
 cd /root
+MODE=${MODE:-""}
+EFS=${EFS:-""}
+
+cd /root
 
 # Install aws
 alias aws="/usr/local/aws-cli/v2/current/bin/aws"
@@ -10,119 +14,148 @@ export PATH="/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:${PATH}"
 yum install fuse gcc python3 bash nfs-utils --quiet -y
 sudo mkdir -p /mnt/efs
 sudo chmod 777 /mnt/efs
-sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport 10.1.10.236:/ /mnt/efs
+sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport $EFS:/ /mnt/efs
 
 # Make sure it is mounted before end script
 sleep 10s
 
 # Make the directories if it does not exist already
+# These can be made regardless of the mode
 # Reason why for so many if statements is to allow for new directories
 # to be made without relying on if the user exists
-if [ ! -d "/mnt/efs/$FLOAT_USER/" ]; then
-    sudo mkdir -p /mnt/efs/$FLOAT_USER
-    sudo chown -R mmc /mnt/efs/$FLOAT_USER
-    sudo chmod -R 777 /mnt/efs/$FLOAT_USER
-    sudo chgrp -R users /mnt/efs/$FLOAT_USER
-fi
-if [ ! -d "/mnt/efs/$FLOAT_USER/.pixi" ]; then
-    sudo mkdir -p /mnt/efs/$FLOAT_USER/.pixi
-    sudo chown -R mmc /mnt/efs/$FLOAT_USER/.pixi
-    sudo chmod -R 777 /mnt/efs/$FLOAT_USER/.pixi
-    sudo chgrp -R users /mnt/efs/$FLOAT_USER/.pixi
-fi
+# NOTE: oem_admin will use host_init_batch.sh instead, but will still use bind_mount.sh
+make_directories() {
+    main_DIR=$1
 
-if [ ! -d "/mnt/efs/$FLOAT_USER/micromamba" ]; then
-    sudo mkdir -p /mnt/efs/$FLOAT_USER/micromamba
-    sudo chown -R mmc /mnt/efs/$FLOAT_USER/micromamba
-    sudo chmod -R 777 /mnt/efs/$FLOAT_USER/micromamba
-    sudo chgrp -R users /mnt/efs/$FLOAT_USER/micromamba
-fi
+    if [ ! -d "$main_PATH/" ]; then
+        sudo mkdir -p $main_DIR
+        sudo chown -R mmc $main_DIR
+        sudo chmod -R 777 $main_DIR
+        sudo chgrp -R users $main_DIR
+    fi
+    if [ ! -d "$main_DIR/.pixi" ]; then
+        sudo mkdir -p $main_DIR/.pixi
+        sudo chown -R mmc $main_DIR/.pixi
+        sudo chmod -R 777 $main_DIR/.pixi
+        sudo chgrp -R users $main_DIR/.pixi
+    fi
 
-if [ ! -d "/mnt/efs/$FLOAT_USER/.config" ]; then
-    sudo mkdir -p /mnt/efs/$FLOAT_USER/.config
-    sudo chown -R mmc /mnt/efs/$FLOAT_USER/.config
-    sudo chmod -R 777 /mnt/efs/$FLOAT_USER/.config
-    sudo chgrp -R users /mnt/efs/$FLOAT_USER/.config
-fi
+    if [ ! -d "$main_DIR/micromamba" ]; then
+        sudo mkdir -p $main_DIR/micromamba
+        sudo chown -R mmc $main_DIR/micromamba
+        sudo chmod -R 777 $main_DIR/micromamba
+        sudo chgrp -R users $main_DIR/micromamba
+    fi
 
-if [ ! -d "/mnt/efs/$FLOAT_USER/.cache" ]; then
-    sudo mkdir -p /mnt/efs/$FLOAT_USER/.cache
-    sudo chown -R mmc /mnt/efs/$FLOAT_USER/.cache
-    sudo chmod -R 777 /mnt/efs/$FLOAT_USER/.cache
-    sudo chgrp -R users /mnt/efs/$FLOAT_USER/.cache
-fi
+    if [ ! -d "$main_DIR/.config" ]; then
+        sudo mkdir -p $main_DIR/.config
+        sudo chown -R mmc $main_DIR/.config
+        sudo chmod -R 777 $main_DIR/.config
+        sudo chgrp -R users $main_DIR/.config
+    fi
 
-if [ ! -d "/mnt/efs/$FLOAT_USER/.conda" ]; then
-    sudo mkdir -p /mnt/efs/$FLOAT_USER/.conda
-    sudo chown -R mmc /mnt/efs/$FLOAT_USER/.conda
-    sudo chmod -R 777 /mnt/efs/$FLOAT_USER/.conda
-    sudo chgrp -R users /mnt/efs/$FLOAT_USER/.conda
-fi
+    if [ ! -d "$main_DIR/.cache" ]; then
+        sudo mkdir -p $main_DIR/.cache
+        sudo chown -R mmc $main_DIR/.cache
+        sudo chmod -R 777 $main_DIR/.cache
+        sudo chgrp -R users $main_DIR/.cache
+    fi
 
-if [ ! -d "/mnt/efs/$FLOAT_USER/.condarc" ]; then
-    # A file, not a directory
-    sudo touch /mnt/efs/$FLOAT_USER/.condarc
-    sudo chown mmc /mnt/efs/$FLOAT_USER/.condarc
-    sudo chmod 777 /mnt/efs/$FLOAT_USER/.condarc
-    sudo chgrp users /mnt/efs/$FLOAT_USER/.condarc
-fi
+    if [ ! -d "$main_DIR/.conda" ]; then
+        sudo mkdir -p $main_DIR/.conda
+        sudo chown -R mmc $main_DIR/.conda
+        sudo chmod -R 777 $main_DIR/.conda
+        sudo chgrp -R users $main_DIR/.conda
+    fi
 
-if [ ! -d "/mnt/efs/$FLOAT_USER/.ipython" ]; then
-    sudo mkdir -p /mnt/efs/$FLOAT_USER/.ipython
-    sudo chown -R mmc /mnt/efs/$FLOAT_USER/.ipython
-    sudo chmod -R 777 /mnt/efs/$FLOAT_USER/.ipython
-    sudo chgrp -R users /mnt/efs/$FLOAT_USER/.ipython
-fi
+    if [ ! -f "$main_DIR/.condarc" ]; then
+        # A file, not a directory
+        sudo touch $main_DIR/.condarc
+        sudo chown mmc $main_DIR/.condarc
+        sudo chmod 777 $main_DIR/.condarc
+        sudo chgrp users $main_DIR/.condarc
+    fi
 
-if [ ! -d "/mnt/efs/$FLOAT_USER/.jupyter" ]; then
-    sudo mkdir -p /mnt/efs/$FLOAT_USER/.jupyter
-    sudo chown -R mmc /mnt/efs/$FLOAT_USER/.jupyter
-    sudo chmod -R 777 /mnt/efs/$FLOAT_USER/.jupyter
-    sudo chgrp -R users /mnt/efs/$FLOAT_USER/.jupyter
-fi
+    if [ ! -d "$main_DIR/.ipython" ]; then
+        sudo mkdir -p $main_DIR/.ipython
+        sudo chown -R mmc $main_DIR/.ipython
+        sudo chmod -R 777 $main_DIR/.ipython
+        sudo chgrp -R users $main_DIR/.ipython
+    fi
 
-if [ ! -d "/mnt/efs/$FLOAT_USER/.local" ]; then
-    sudo mkdir -p /mnt/efs/$FLOAT_USER/.local
-    sudo chown -R mmc /mnt/efs/$FLOAT_USER/.local
-    sudo chmod -R 777 /mnt/efs/$FLOAT_USER/.local
-    sudo chgrp -R users /mnt/efs/$FLOAT_USER/.local
-fi
+    if [ ! -d "$main_DIR/.jupyter" ]; then
+        sudo mkdir -p $main_DIR/.jupyter
+        sudo chown -R mmc $main_DIR/.jupyter
+        sudo chmod -R 777 $main_DIR/.jupyter
+        sudo chgrp -R users $main_DIR/.jupyter
+    fi
 
-if [ ! -d "/mnt/efs/$FLOAT_USER/.mamba/pkgs" ]; then
-    sudo mkdir -p /mnt/efs/$FLOAT_USER/.mamba/pkgs
-    sudo chown -R mmc /mnt/efs/$FLOAT_USER/.mamba
-    sudo chmod -R 777 /mnt/efs/$FLOAT_USER/.mamba
-    sudo chgrp -R users /mnt/efs/$FLOAT_USER/.mamba
-fi
+    if [ ! -d "$main_DIR/.local" ]; then
+        sudo mkdir -p $main_DIR/.local
+        sudo chown -R mmc $main_DIR/.local
+        sudo chmod -R 777 $main_DIR/.local
+        sudo chgrp -R users $main_DIR/.local
+    fi
 
-if [ ! -d "/mnt/efs/$FLOAT_USER/.mambarc" ]; then
-    # A file, not a directory
-    sudo touch /mnt/efs/$FLOAT_USER/.mambarc
-    sudo chown mmc /mnt/efs/$FLOAT_USER/.mambarc
-    sudo chmod 777 /mnt/efs/$FLOAT_USER/.mambarc
-    sudo chgrp users /mnt/efs/$FLOAT_USER/.mambarc
-fi
+    if [ ! -d "$main_DIR/.mamba/pkgs" ]; then
+        sudo mkdir -p $main_DIR/.mamba/pkgs
+        sudo chown -R mmc $main_DIR/.mamba
+        sudo chmod -R 777 $main_DIR/.mamba
+        sudo chgrp -R users $main_DIR/.mamba
+    fi
 
-# For Github setup
-if [ ! -d "/mnt/efs/$FLOAT_USER/ghq" ]; then
-    sudo mkdir -p /mnt/efs/$FLOAT_USER/ghq
-    sudo chown -R mmc /mnt/efs/$FLOAT_USER/ghq
-    sudo chmod -R 777 /mnt/efs/$FLOAT_USER/ghq
-    sudo chgrp -R users /mnt/efs/$FLOAT_USER/ghq
-fi
+    if [ ! -f "$main_DIR/.mambarc" ]; then
+        # A file, not a directory
+        sudo touch $main_DIR/.mambarc
+        sudo chown mmc $main_DIR/.mambarc
+        sudo chmod 777 $main_DIR/.mambarc
+        sudo chgrp users $main_DIR/.mambarc
+    fi
 
-# For bashrc and profile, if they do exist, make sure they have the right permissions
-# for this setup
-if [ -d "/mnt/efs/$FLOAT_USER/.bashrc" ]; then
-    sudo chown mmc /mnt/efs/$FLOAT_USER/.bashrc
-    sudo chmod 777 /mnt/efs/$FLOAT_USER/.bashrc
-    sudo chgrp users /mnt/efs/$FLOAT_USER/.bashrc
+    # For Github setup
+    if [ ! -d "$main_DIR/ghq" ]; then
+        sudo mkdir -p $main_DIR/ghq
+        sudo chown -R mmc $main_DIR/ghq
+        sudo chmod -R 777 $main_DIR/ghq
+        sudo chgrp -R users $main_DIR/ghq
+    fi
+
+    # Create .bashrc and .profile files
+    if [ ! -f "$main_DIR/.bashrc" ]; then
+        sudo touch $main_DIR/.bashrc
+    fi
+    if [ ! -f "$main_DIR/.profile" ]; then
+        # Since .profile file will not change per mode, we can edit it here
+        sudo touch $main_DIR/.profile
+        tee ${efs_path}/.profile << EOF
+# if running bash
+if [ -n "\$BASH_VERSION" ]; then
+# include .bashrc if it exists
+if [ -f "\$HOME/.bashrc" ]; then
+. "\$HOME/.bashrc"
 fi
-if [ -d "/mnt/efs/$FLOAT_USER/.profile" ]; then
-    sudo chown mmc /mnt/efs/$FLOAT_USER/.profile
-    sudo chmod 777 /mnt/efs/$FLOAT_USER/.profile
-    sudo chgrp users /mnt/efs/$FLOAT_USER/.profile
 fi
+EOF
+    fi
+
+    # For bashrc and profile, if they do exist, make sure they have the right permissions
+    if [ -f "$main_DIR/.bashrc" ]; then
+        sudo chown mmc $main_DIR/.bashrc
+        sudo chmod 777 $main_DIR/.bashrc
+        sudo chgrp users $main_DIR/.bashrc
+    fi
+    if [ -f "$main_DIR/.profile" ]; then
+        sudo chown mmc $main_DIR/.profile
+        sudo chmod 777 $main_DIR/.profile
+        sudo chgrp users $main_DIR/.profile
+    fi
+}
+
+# NOTE: Even if oem_packages does not need user directories, they are only made if they do not exist
+# and will not be used anyway
+# The same goes for shared directories for mount_packages
+make_directories /mnt/efs/shared
+make_directories /mnt/efs/$FLOAT_USER
 
 # This section will rename the files under /opt/share/.pixi/bin/trampoline_configuration to point to the right location
 # This is so non-admin users will be able to use shared packages

@@ -2,68 +2,78 @@
 
 # Set strict mode
 set -euo pipefail
+RED='\033[0;31m'
+NC='\033[0m' # No Color
 
-# Default values for parameters
-opcenter="44.222.241.133"
-s3_path="s3://statfungen/ftp_fgc_xqtl"
-vm_path="/data/"
-image="quay.io/danielnachun/tmate-minimal"
+# Required values (given by CLI)
+opcenter=""
+gateway=""
+securityGroup=""
+efs_ip=""
+
+# Modes
+oem_admin="" # For batch jobs only
+shared_admin="" # For updating shared packages in interactive jobs
+mount_packages="" # For accessing one's own packages in interactive jobs
+oem_packages="" # For accessing shared packages in interactive jobs
+
+# Optional values (given by CLI) - some default values given
+declare -a additional_mounts=()
+declare -a dataVolumeOption=()
 core=4
 mem=16
-publish="8888:8888"
-vm_policy="onDemand"
-ide="tmate"
-mount_packages="false"
-float_executable="float"
 dryrun=false
+entrypoint=""
+float_executable="float"
+ide="tmate"
 idle_time=7200
-
-# Initialize other variables
-user=""
-password=""
-job_name=""
-no_mount=false
-additional_mounts=()
-publish_set=false
-gateway="" # Default will be set later, as it depends on OPCENTER
+image="quay.io/danielnachun/tmate-minimal"
 image_vol_size=""
 root_vol_size=""
-oem_admin=""
-shared_admin=""
+job_name=""
+no_mount=false
+publish="8888:8888"
+publish_set=false
+s3_path=""
+vm_path=""
 suspend_off=""
-entrypoint=""
+user=""
+password=""
+vm_policy="onDemand"
 
 # Function to display usage information
 usage() {
     echo "Usage: $0 [options]"
     echo "Options:"
-    echo "  -o, --opcenter <ip>              Set the OP IP address"
-    echo "  -u, --user <username>            Set the username"
-    echo "  -p, --password <password>        Set the password"
-    echo "  -s3, --s3_path <path>            Set the S3 path"
-    echo "  --vm_path <path>                 Set the VM path"
-    echo "  -i, --image <image>              Set the Docker image"
-    echo "  -c, --core <cores>               Set the number of cores"
-    echo "  -m, --mem <memory>               Set the memory size"
-    echo "  -pub, --publish <ports>          Set the port publishing"
-    echo "  -sg, --securityGroup <group>     Set the security group"
-    echo "  -vp, --vmPolicy <policy>         Set the VM policy"
-    echo "  -ivs, --imageVolSize <size>      Set the image volume size"
-    echo "  -rvs, --rootVolSize <size>       Set the root volume size"
+    echo "  -o, --opcenter <ip>                   (REQUIRED) Set the OP IP address"
+    echo "  -u, --user <username>                 Set the username"
+    echo "  -p, --password <password>             Set the password"
+    echo "  -s3, --s3_path <path>                 Set the S3 path"
+    echo "  -vm, --vm_path <path>                 Set the VM path"
+    echo "  -i, --image <image>                   Set the Docker image"
+    echo "  -c, --core <cores>                    Set the number of cores"
+    echo "  -m, --mem <memory>                    Set the memory size"
+    echo "  -pub, --publish <ports>               Set the port publishing in the form of port:port"
+    echo "  -sg, --securityGroup <group>          (REQUIRED) Set the security group"
+    echo "  -g, --gateway <id>                    (REQUIRED) Set gateway"
+    echo "  -efs <ip>                             (REQUIRED) Set EFS IP"
+    echo "  -vp, --vmPolicy <policy>              Set the VM policy"
+    echo "  -ivs, --imageVolSize <size>           Set the image volume size"
+    echo "  -rvs, --rootVolSize <size>            Set the root volume size"
     echo "  -ide, --interactive_develop_env <env> Set the IDE"
-    echo "  -am, --additional_mounts <mount> Add additional mounts"
-    echo "  --no-mount                       Disable all mounting"
-    echo "  -jn, --job_name <name>           Set the job name"
-    echo "  --mount-packages                 Mount dedicated volumes on AWS to accommodate conda package installation and usage"
-    echo "  --float-executable <path>        Set the path to the float executable (default: float)"
-    echo "  -g, --gateway <id>               Set gatewayID (default: default gateway on corresponding OpCenter)"
-    echo "  --entrypoint <dir>               Set entrypoint of interactive job"
-    echo "  --idle                           Amount of idle time before suspension. Only works for jupyter instances (default: 7200 seconds)"
-    echo "  --suspend-off                    For Jupyter jobs, turn off the auto-suspension feature"
-    echo "  --oem-admin                      Run in admin mode to make changes to OEM packages"
-    echo "  --shared-admin                   Run in admin mode to make changes to shared packages"
-    echo "  --dryrun                         Execute a dry run, printing commands without running them."
-    echo "  -h, --help                       Display this help message"
+    echo "  -am, --additional_mounts <mount>      Add additional volume mounts in the form of s3_path:vm_path,...separated by commas"
+    echo "  --no-mount                            Disable all mounting"
+    echo "  -jn, --job_name <name>                Set the job name"
+    echo "  --float-executable <path>             Set the path to the float executable (default: float)"
+    echo "  --entrypoint <dir>                    Set entrypoint of interactive job - please give Github link"
+    echo "  --idle                                Amount of idle time before suspension. Only works for jupyter instances (default: 7200 seconds)"
+    echo "  --suspend-off                         For Jupyter jobs, turn off the auto-suspension feature"
+    echo "  --oem-admin                           Run in admin mode to make changes to batch packages (for batch job updates only)"
+    echo "  --shared-admin                        Run in admin mode to make changes to shared packages"
+    echo "  --mount-packages                      Grant the ability to use user packages"
+    echo "  --oem-packages                        Grant the ability to use shared packages"
+    echo "  --dryrun                              Execute a dry run, printing commands without running them."
+    echo "  -h, --help                            Display this help message"
 }
 
 # Parse command line options
@@ -77,25 +87,30 @@ while [[ "$#" -gt 0 ]]; do
         -i|--image) image="$2"; shift ;;
         -c|--core) core="$2"; shift ;;
         -m|--mem) mem="$2"; shift ;;
-        -pub|--publish) publish="$2"; publish_set=true; shift ;;
+        -pub|--publish) publish="$2"; publish="$2"; publish_set=true; shift ;;
         -sg|--securityGroup) securityGroup="$2"; shift ;;
+        -g|--gateway) gateway="$2"; shift ;;
+        -efs) efs_ip="$2"; shift ;;
         -vp|--vmPolicy) vm_policy="$2"; shift ;;
         -ivs|--imageVolSize) image_vol_size="$2"; shift ;;
         -rvs|--rootVolSize) root_vol_size="$2"; shift ;;
         -ide|--interactive_develop_env) ide="$2"; shift ;;
-        -am|--additional_mounts) additional_mounts+=("$2"); shift ;;
         --no-mount) no_mount=true ;;
         -jn|--job_name) job_name="$2"; shift ;;
-        --mount-packages) mount_packages="true" ;;
         --float-executable) float_executable="$2"; shift ;;
-        --idle) idle_time="$2"; shift ;;
-        -g|--gateway) gateway="$2"; shift ;;
         --entrypoint) entrypoint="$2"; shift ;;
-        -h|--help) usage; exit 0 ;;
+        --idle) idle_time="$2"; shift ;;
+        --suspend-off) suspend_off=true ;;
         --oem-admin) oem_admin=true ;;
         --shared-admin) shared_admin=true ;;
+        --mount-packages) mount_packages=true ;;
+        --oem-packages) oem_packages=true ;;
         --dryrun) dryrun=true ;;
-        --suspend-off) suspend_off=true ;;
+        -am|--additional_mounts)
+            IFS=',' read -r -a additional_mounts <<< "$2";
+            shift
+            ;;
+        -h|--help) usage; exit 0 ;;
         *) echo "Unknown parameter passed: $1"; usage; exit 1 ;;
     esac
     shift
@@ -104,264 +119,50 @@ done
 # Now that all variables are initialized, we can set -u
 set -u
 
-RED='\033[0;31m'
-NC='\033[0m' # No Color
-
-valid_ides=("tmate" "jupyter" "jupyter-lab" "rstudio" "vscode")
-if [[ ! " ${valid_ides[*]} " =~ " ${ide} " ]]; then
-    echo "Error: Invalid IDE specified. Please choose one of: ${valid_ides[*]}"
-    exit 1
-fi
-
-# If ide is tmate, warn user about initial package setup
-if [ $ide == "tmate" ]; then
-    while true; do
-    echo ""
-    echo -e "${RED}NOTICE:${NC} tmate sessions are primarily designed for initial package configuration.\nFor regular development work, we recommend utilizing a more advanced Integrated Development Environment (IDE)\nvia the -ide option, if you have previously set up an alternative IDE.\n\nDo you wish to proceed with the tmate session? (y/N): \c"
-    read input
-    input=${input:-n}  # Default to "n" if no input is given
-    case $input in
-        [yY]) 
-            break
-            ;;
-        [nN]) 
-            echo "Exiting the script."
-            exit 0
-            ;;
-        *) 
-            echo "Invalid input. Please enter 'y' or 'n'."
-            ;;
-    esac
-done
-fi
-
-# Update hard-coded security group and gateway if no specific gateway given
-securityGroup="sg-02867677e76635b25"
-if [[ "$opcenter" == "3.82.198.55" ]]; then
-    if [[ -z "$gateway" ]]; then
-        gateway="g-4nntvdipikat0673xagju"
+# Check required parameters are given
+check_required_params() {
+    missing_params=""
+    is_missing=false
+    if [ -z "$opcenter" ]; then
+        missing_params+="-o, "
+        is_missing=true
     fi
-elif [[ "$opcenter" == "44.222.241.133" ]]; then
-    if [[ -z "$gateway" ]]; then
-        gateway="g-9xahbrb5rkbs0ic8yzylk"
+    if [ -z "$gateway" ]; then
+        missing_params+="-g, "
+        is_missing=true
     fi
-    # Updated gateway for vscode servers
-    if [[ $ide == "vscode" ]]; then
-        gateway="g-sidlpgb7oi9p48kxycpmn"
+    if [ -z "$securityGroup" ]; then
+        missing_params+="-sg, "
+        is_missing=true
     fi
-fi
-
-# Adjust publish port if not set by user and ide is rstudio
-if [[ "$publish_set" == false && "$ide" == "rstudio" ]]; then
-    publish="8787:8787"
-fi
-if [[ "$publish_set" == false && "$ide" == "vscode" ]]; then
-    publish="8989:8989"
-fi
-
-# Prompt for user and password if not provided
-if [[ -z "$user" ]]; then
-    read -p "Enter user for $opcenter: " user
-fi
-if [[ -z "$password" ]]; then
-    read -sp "Enter password for $opcenter: " password
-    echo ""
-fi
-
-# Set default job_name if not provided by user
-published_port=$(echo "$publish" | cut -d':' -f1)
-if [[ -z "$job_name" ]]; then
-    # Extract the published port from the publish variable
-    job_name="${user}_${ide}_${published_port}"
-# If there is a custom job name, we add identifiers to the end
-else
-    job_name+=".${user}_${ide}_${published_port}"
-fi
-
-# Data volume handling
-if [[ $no_mount == false ]]; then
-    dataVolumeOption=("--dataVolume" "[mode=rw,endpoint=s3.us-east-1.amazonaws.com]$s3_path:$vm_path")
-    if [[ ${#additional_mounts[@]} -gt 0 ]]; then  # Check if additional_mounts has any elements
-        for mount in "${additional_mounts[@]}"; do
-            dataVolumeOption+=("--dataVolume" "[mode=rw,endpoint=s3.us-east-1.amazonaws.com]${mount}")
-        done
+    if [ -z "$efs_ip" ]; then
+        missing_params+="-efs, "
+        is_missing=true
     fi
-else
-    dataVolumeOption=()
-fi
-
-# Determine VM Policy
-case "$(echo "$vm_policy" | tr '[:upper:]' '[:lower:]')" in
-    spotonly) vm_policy_command="[spotOnly=true]" ;;
-    ondemand) vm_policy_command="[onDemand=true]" ;;
-    spotfirst) vm_policy_command="[spotFirst=true]" ;;
-    *)
-        echo "Invalid VM Policy setting '$vm_policy'. Please use 'spotOnly', 'onDemand', or 'spotFirst'"
+    missing_params=${missing_params%, }
+    if [ "$is_missing" = true ]; then
+        echo "Error: Missing required parameters: $missing_params" >&2
+        usage
         exit 1
-        ;;
-esac
-
-# Check if specified scripts exist
-function find_script_dir() {
-    SOURCE=${BASH_SOURCE[0]}
-    while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
-        DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
-        SOURCE=$(readlink "$SOURCE")
-        [[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
-    done
-    DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
-    echo $DIR
+    fi
 }
-script_dir=$(find_script_dir)
 
-# Log in
-"$float_executable" login -a "$opcenter" -u "$user" -p "$password"
+# Set tmate warning and check valid IDEs
+give_tmate_warning () {
+    RED='\033[0;31m'
+    NC='\033[0m' # No Color
 
-# Build the float submit command as an array
-float_submit_args=(
-    "$float_executable" "submit" "-a" "$opcenter"
-    "-i" "$image" "-c" "$core" "-m" "$mem"
-    "--vmPolicy" "$vm_policy_command"
-    "--gateway" "$gateway"
-    "--migratePolicy" "[disable=true,evadeOOM=false]"
-    "--publish" "$publish"
-    "--securityGroup" "$securityGroup"
-    "--withRoot"
-    "--allowList" "[r5*,r6*,r7*,m*]"
-    "-e" "GRANT_SUDO=yes"
-    "--env" "JUPYTER_RUNTIME_DIR=/tmp/jupyter_runtime"
-    "--env" "JUPYTER_ENABLE_LAB=TRUE"
-    "--env" "VMUI=$ide"
-    "${dataVolumeOption[@]}"
-    "--env" "ALLOWABLE_IDLE_TIME_SECONDS=$idle_time"
-)
-
-# If image vol size and root vol size not empty, populate float args
-if [[ ! -z "$image_vol_size" ]]; then
-    float_submit_args+=(
-        "--imageVolSize" "$image_vol_size"
-    )
-fi
-if [[ ! -z "$root_vol_size" ]]; then
-    float_submit_args+=(
-        "--rootVolSize" "$root_vol_size"
-    )
-fi
-
-# If entrypoint provided, add it
-if [[ ! -z "$entrypoint" ]]; then
-    float_submit_args+=(
-        "--env" "ENTRYPOINT=$entrypoint"
-    )
-fi
-
-if [[ "${oem_admin}" == "true" && ${shared_admin} == "true" ]]; then
-    echo -e "${RED}ERROR: only one of --oem-admin and --shared-admin can be specificied"; exit 1
-fi
-
-if [[ "${oem_admin}" == "true" || ${shared_admin} == "true" ]] && [[ ${mount_packages} == "false" ]]; then
-    echo -e "${RED}ERROR: --mount-packages must be specified when --oem-admin or --shared-admin are specified"; exit 1
-fi
-
-host_script="host_init_interactive.sh"
-if [[ "${oem_admin}" == "true" ]]; then	
-    running_batch_jobs=$($float_executable list -a 3.82.198.55 -u $user -p $password -f "status=Executing or status=Floating or status=Suspended or status=Suspending or status=Starting or status=Initializing" | awk '{print $4}' | grep -v -e '^$' -e 'NAME' || true) 
-    if [[ ! -z $running_batch_jobs ]]; then
-        batch_job_count=$(echo "$running_batch_jobs" | wc -l)
-    else
-        batch_job_count=0
+    valid_ides=("tmate" "jupyter" "jupyter-lab" "rstudio" "vscode")
+    if [[ ! " ${valid_ides[*]} " =~ " ${ide} " ]]; then
+        echo "Error: Invalid IDE specified. Please choose one of: ${valid_ides[*]}"
+        exit 1
     fi
-    if [[ $batch_job_count -gt 0 ]]; then
-        echo ""
-        echo -e "${RED}WARNING: ${NC}There are ${batch_job_count} batch jobs running. Updating packages in the batch setup could lead to checkpoint failures."
+
+    # If ide is tmate, warn user about initial package setup
+    if [ $ide == "tmate" ]; then
         while true; do
-            echo -e "Do you wish to proceed (y/N)? \c"
-            read input
-            input=${input:-n}  # Default to "n" if no input is given
-            case $input in
-                [yY])
-                    break
-                    ;;
-                [nN]) 
-                    # If warning is not accepted, exit the script
-                    echo "Exiting the script."
-                    exit 0
-                    ;;
-                *) 
-                    echo "Invalid input. Please enter 'y' or 'n'."
-                    ;;
-            esac
-        done
-    fi
-    float_submit_args+=(
-    "--env" "MODE=oem_admin"
-    )
-    host_script="host_init_batch.sh"
-elif [[ "${shared_admin}" == "true" ]]; then
-    running_int_jobs=$($float_executable list -a 44.222.241.133 -f "status=Executing or status=Floating or status=Suspended or status=Suspending or status=Starting or status=Initializing" | awk '{print $4}' | grep -v -e '^$' -e 'NAME' || true)
-    if [[ ! -z $running_int_jobs ]]; then
-        int_job_count=$(echo "$running_int_jobs" | wc -l)
-    else
-        int_job_count=0
-    fi
-    if [[ $int_job_count -gt 0 ]]; then
         echo ""
-        echo -e "${RED}WARNING: ${NC}There are ${int_job_count} interactive jobs running. Updating packages in the interactive setup could lead to checkpoint failures."
-        while true; do
-            echo -e "Do you wish to proceed (y/N)? \c"
-            read input
-            input=${input:-n}  # Default to "n" if no input is given
-            case $input in
-                [yY])
-                    break
-                    ;;
-                [nN]) 
-                    # If warning is not accepted, exit the script
-                    echo "Exiting the script."
-                    exit 0
-                    ;;
-                *) 
-                    echo "Invalid input. Please enter 'y' or 'n'."
-                    ;;
-            esac
-        done
-    fi
-    float_submit_args+=(
-    "--env" "MODE=shared_admin"
-    )
-else 
-    float_submit_args+=(
-        "--env" "MODE=user"
-    )
-fi
-
-# Add host-init and mount-init if specified
-if [[ "$mount_packages" == "true" ]]; then
-    float_submit_args+=(
-        "-j" "$script_dir/bind_mount.sh"
-        "--hostInit" "$script_dir/${host_script}"
-        "--dirMap" "/mnt/efs:/mnt/efs"
-        "-n" "$job_name"
-    )
-fi
-
-# If suspend_on is empty, suspension feature is on
-# If it is populated, turn off suspension with an env variable
-if [[ "$suspend_off" == "true" ]]; then
-    float_submit_args+=(
-        "--env" "SUSPEND_FEATURE=false"
-    )
-fi
-
-# Determine if there are exisitng interactive jobs for this user
-running_jobs=$($float_executable list -f user=${user} -f "status=Executing or status=Suspended or status=Suspending or status=Starting or status=Initializing"| awk '{print $4}' | grep -v -e '^$' -e 'NAME' | grep "${user}_${ide}_${published_port}" || true)
-
-# If there exists executing or suspended jobs that match the ID, warn user
-if [[ -n "$running_jobs" ]]; then
-    job_count=$(echo "$running_jobs" | wc -l)    	
-    echo -e "${RED}WARNING: ${NC}User ${RED}$user${NC} already has ${job_count} existing interactive jobs under the same ide ${RED}$ide${NC} and port ${RED}$published_port${NC}."
-    while true; do
-        echo -e "Do you wish to proceed (y/N)? \c"
+        echo -e "${RED}NOTICE:${NC} tmate sessions are primarily designed for initial package configuration.\nFor regular development work, we recommend utilizing a more advanced Integrated Development Environment (IDE)\nvia the -ide option, if you have previously set up an alternative IDE.\n\nDo you wish to proceed with the tmate session? (y/N): \c"
         read input
         input=${input:-n}  # Default to "n" if no input is given
         case $input in
@@ -377,7 +178,304 @@ if [[ -n "$running_jobs" ]]; then
                 ;;
         esac
     done
-fi
+    fi
+}
+
+# Prompt for user and password if not provided
+login() {
+    if [[ -z "$user" ]]; then
+        read -p "Enter user for $opcenter: " user
+    fi
+    if [[ -z "$password" ]]; then
+        read -sp "Enter password for $opcenter: " password
+        echo ""
+    fi
+    "$float_executable" login -a "$opcenter" -u "$user" -p "$password"
+}
+
+# Adjust publish port if not set by user and by ide
+determine_ports() {
+    if [[ "$publish_set" == false && "$ide" == "rstudio" ]]; then
+        publish="8787:8787"
+    fi
+    if [[ "$publish_set" == false && "$ide" == "vscode" ]]; then
+        publish="8989:8989"
+    fi
+    # Set default job_name if not provided by user
+    published_port=$(echo "$publish" | cut -d':' -f1)
+    if [[ -z "$job_name" ]]; then
+        # Extract the published port from the publish variable
+        job_name="${user}_${ide}_${published_port}"
+    # If there is a custom job name, we add identifiers to the end
+    else
+        job_name+=".${user}_${ide}_${published_port}"
+    fi
+}
+
+# Data volume handling
+determine_mounts() {
+    if [[ $no_mount == false ]]; then
+        if [[ ! -z $s3_path ]] && [[ ! -z $vm_path ]]; then
+            dataVolumeOption=("--dataVolume" "[mode=rw,endpoint=s3.us-east-1.amazonaws.com]$s3_path:$vm_path")
+        fi
+        if [[ ${#additional_mounts[@]} -gt 0 ]]; then  # Check if additional_mounts has any elements
+            for mount in "${additional_mounts[@]}"; do
+                dataVolumeOption+=("--dataVolume" "[mode=rw,endpoint=s3.us-east-1.amazonaws.com]${mount}")
+            done
+        fi
+    else
+        dataVolumeOption=()
+    fi
+}
+
+# Determine VM Policy for instance
+determine_vm_policy() {
+    case "$(echo "$vm_policy" | tr '[:upper:]' '[:lower:]')" in
+        spotonly) vm_policy_command="[spotOnly=true]" ;;
+        ondemand) vm_policy_command="[onDemand=true]" ;;
+        spotfirst) vm_policy_command="[spotFirst=true]" ;;
+        *)
+            echo "Invalid VM Policy setting '$vm_policy'. Please use 'spotOnly', 'onDemand', or 'spotFirst'"
+            exit 1
+            ;;
+    esac
+}
+
+# Find parent directory of scripts to use the right one
+find_script_dir() {
+    SOURCE=${BASH_SOURCE[0]}
+    while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+        DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+        SOURCE=$(readlink "$SOURCE")
+        [[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+    done
+    DIR=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
+    echo $DIR
+}
+
+# Determine if there are exisitng interactive jobs for this user
+determine_running_jobs() {
+    running_jobs=$($float_executable list -f user=${user} -f "status=Executing or status=Suspended or status=Suspending or status=Starting or status=Initializing"| awk '{print $4}' | grep -v -e '^$' -e 'NAME' | grep "${user}_${ide}_${published_port}" || true)
+
+    # If there exists executing or suspended jobs that match the ID, warn user
+    if [[ -n "$running_jobs" ]]; then
+        job_count=$(echo "$running_jobs" | wc -l)    	
+        echo -e "${RED}WARNING: ${NC}User ${RED}$user${NC} already has ${job_count} existing interactive jobs under the same ide ${RED}$ide${NC} and port ${RED}$published_port${NC}."
+        while true; do
+            echo -e "Do you wish to proceed (y/N)? \c"
+            read input
+            input=${input:-n}  # Default to "n" if no input is given
+            case $input in
+                [yY]) 
+                    break
+                    ;;
+                [nN]) 
+                    echo "Exiting the script."
+                    exit 0
+                    ;;
+                *) 
+                    echo "Invalid input. Please enter 'y' or 'n'."
+                    ;;
+            esac
+        done
+    fi
+}
+
+# Additional float parameter checks
+float_parameter_checks() {
+    # Build the float submit command as an array
+    float_submit_args+=(
+        "-a" "$opcenter"
+        "-i" "$image" "-c" "$core" "-m" "$mem"
+        "--vmPolicy" "$vm_policy_command"
+        "--gateway" "$gateway"
+        "--securityGroup" "$securityGroup"
+        "--migratePolicy" "[disable=true,evadeOOM=false]"
+        "--publish" "$publish"
+        "--withRoot"
+        "--allowList" "[r5*,r6*,r7*,m*]"
+        "-j" "$script_dir/bind_mount.sh"
+        "--hostInit" "$script_dir/${host_script}"
+        "--dirMap" "/mnt/efs:/mnt/efs"
+        "-n" "$job_name"
+        "--env" "GRANT_SUDO=yes"
+        "--env" "JUPYTER_RUNTIME_DIR=/tmp/jupyter_runtime"
+        "--env" "JUPYTER_ENABLE_LAB=TRUE"
+        "--env" "VMUI=$ide"
+        "--env" "ALLOWABLE_IDLE_TIME_SECONDS=$idle_time"
+        "--env" "EFS=$efs_ip"
+    )
+
+    # If dataVolume is nonempty, add it in
+    if (( ${#dataVolumeOption[@]} )); then
+        float_submit_args+=(
+            "${dataVolumeOption[@]}"
+        )
+    fi
+    # If image vol size and root vol size not empty, populate float args
+    if [[ ! -z "$image_vol_size" ]]; then
+        float_submit_args+=(
+            "--imageVolSize" "$image_vol_size"
+        )
+    fi
+    if [[ ! -z "$root_vol_size" ]]; then
+        float_submit_args+=(
+            "--rootVolSize" "$root_vol_size"
+        )
+    fi
+    # If entrypoint provided, add it
+    if [[ ! -z "$entrypoint" ]]; then
+        float_submit_args+=(
+            "--env" "ENTRYPOINT=$entrypoint"
+        )
+    fi
+    # If suspend_on is empty, suspension feature is on
+    # If it is populated, turn off suspension with an env variable
+    if [[ "$suspend_off" == "true" ]]; then
+        float_submit_args+=(
+            "--env" "SUSPEND_FEATURE=false"
+        )
+    fi
+}
+
+# Validate mode combinations
+validate_modes() {
+    if [[ -z "$oem_admin" && -z "$shared_admin" && -z "$mount_packages" && -z "$oem_packages" ]]; then
+        echo "Error: At least one of --oem-admin, --shared-admin, --mount-packages, or --oem-packages must be provided."
+        exit 1
+    elif [[ -n "$oem_admin" && (-n "$shared_admin" || -n "$mount_packages" || -n "$oem_packages") ]]; then
+        echo "Error: --oem-admin cannot be used the other modes."
+        exit 1
+    elif [[ -n "$shared_admin" && (-n "$oem_admin" || -n "$mount_packages" || -n "$oem_packages") ]]; then
+        echo "Error: --shared-admin cannot be used the other modes."
+        exit 1
+    fi
+
+    # Allowable combinations: oem-packages and mount-packages
+    if [[ -n "$mount_packages" && -n "$oem_packages" ]]; then
+        float_submit_args+=(
+            "--env" "MODE=oem_mount_packages"
+        )
+    elif [[ -n "$mount_packages" ]]; then
+        float_submit_args+=(
+            "--env" "MODE=mount_packages"
+        )
+    elif [[ -n "$oem_packages" ]]; then
+        float_submit_args+=(
+            "--env" "MODE=oem_packages"
+        )
+    elif [[ -n "$oem_admin" ]]; then
+        echo ""
+        echo -e "${RED}WARNING: ${NC}Make sure the specified EFS IP corresponds to the batch EFS, as ${RED}--oem-admin${NC} mode requires the ${RED}batch EFS${NC}."
+        while true; do
+                echo -e "Is your EFS IP correct (y/N)? \c"
+                read input
+                input=${input:-n}  # Default to "n" if no input is given
+                case $input in
+                    [yY])
+                        break
+                        ;;
+                    [nN]) 
+                        # If warning is not accepted, exit the script
+                        echo "Exiting the script."
+                        exit 0
+                        ;;
+                    *) 
+                        echo "Invalid input. Please enter 'y' or 'n'."
+                        ;;
+                esac
+            done
+
+        running_batch_jobs=$($float_executable list -a $batch_opcenter -u $user -p $password -f "status=Executing or status=Floating or status=Suspended or status=Suspending or status=Starting or status=Initializing" | awk '{print $4}' | grep -v -e '^$' -e 'NAME' || true) 
+        if [[ ! -z $running_batch_jobs ]]; then
+            batch_job_count=$(echo "$running_batch_jobs" | wc -l)
+        else
+            batch_job_count=0
+        fi
+        if [[ $batch_job_count -gt 0 ]]; then
+            echo ""
+            echo -e "${RED}WARNING: ${NC}There are ${batch_job_count} batch jobs running. Updating packages in the batch setup could lead to checkpoint failures."
+            while true; do
+                echo -e "Do you wish to proceed (y/N)? \c"
+                read input
+                input=${input:-n}  # Default to "n" if no input is given
+                case $input in
+                    [yY])
+                        break
+                        ;;
+                    [nN]) 
+                        # If warning is not accepted, exit the script
+                        echo "Exiting the script."
+                        exit 0
+                        ;;
+                    *) 
+                        echo "Invalid input. Please enter 'y' or 'n'."
+                        ;;
+                esac
+            done
+        fi
+        float_submit_args+=(
+        "--env" "MODE=oem_admin"
+        )
+        host_script="host_init_batch.sh"
+
+    elif [[ -n "$shared_admin" ]]; then
+        running_int_jobs=$($float_executable list -a $opcenter -f "status=Executing or status=Floating or status=Suspended or status=Suspending or status=Starting or status=Initializing" | awk '{print $4}' | grep -v -e '^$' -e 'NAME' || true)
+        if [[ ! -z $running_int_jobs ]]; then
+            int_job_count=$(echo "$running_int_jobs" | wc -l)
+        else
+            int_job_count=0
+        fi
+        if [[ $int_job_count -gt 0 ]]; then
+            echo ""
+            echo -e "${RED}WARNING: ${NC}There are ${int_job_count} interactive jobs running. Updating packages in the interactive setup could lead to checkpoint failures."
+            while true; do
+                echo -e "Do you wish to proceed (y/N)? \c"
+                read input
+                input=${input:-n}  # Default to "n" if no input is given
+                case $input in
+                    [yY])
+                        break
+                        ;;
+                    [nN]) 
+                        # If warning is not accepted, exit the script
+                        echo "Exiting the script."
+                        exit 0
+                        ;;
+                    *) 
+                        echo "Invalid input. Please enter 'y' or 'n'."
+                        ;;
+                esac
+            done
+        fi
+        float_submit_args+=(
+        "--env" "MODE=shared_admin"
+        )
+    fi
+}
+
+# Local variables not affected by CLI
+host_script="host_init_interactive.sh"
+float_submit_args=(
+    "$float_executable" "submit"
+)
+batch_opcenter=3.82.198.55 # Hard-coded for now - only used when running oem-admin mode
+
+# Call commands
+check_required_params
+script_dir=$(find_script_dir)
+give_tmate_warning
+login
+determine_ports
+determine_mounts
+determine_vm_policy
+
+# Existing job checks
+determine_running_jobs
+
+# Build float command
+float_parameter_checks
+validate_modes
 
 # Display the float submit command
 echo "#-------------"

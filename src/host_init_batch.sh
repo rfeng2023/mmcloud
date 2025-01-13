@@ -12,11 +12,11 @@ yum install fuse gcc python3 bash nfs-utils --quiet -y
 sudo mkdir -p /mnt/efs
 sudo chmod 777 /mnt/efs
 # If mode is NOT oem_admin, set EFS to read only
-if [[ ! -n ${MODE} ]]; then
+if [[ ${MODE} == "oem_admin" ]]; then
+    sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport 10.1.10.231:/ /mnt/efs
+else
     echo "MODE is NOT oem_admin. Set EFS to read-only"
     sudo mount -t nfs4 -o ro -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport 10.1.10.231:/ /mnt/efs
-else
-    sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport 10.1.10.231:/ /mnt/efs
 fi
 
 
@@ -67,7 +67,7 @@ if [ ! -d "/mnt/efs/oem/.conda" ]; then
     sudo chgrp -R users /mnt/efs/oem/.conda
 fi
 
-if [ ! -d "/mnt/efs/oem/.condarc" ]; then
+if [ ! -f "/mnt/efs/oem/.condarc" ]; then
     # A file, not a directory
     sudo touch /mnt/efs/oem/.condarc
     sudo chown mmc /mnt/efs/oem/.condarc
@@ -103,7 +103,7 @@ if [ ! -d "/mnt/efs/oem/.mamba/pkgs" ]; then
     sudo chgrp -R users /mnt/efs/oem/.mamba
 fi
 
-if [ ! -d "/mnt/efs/oem/.mambarc" ]; then
+if [ ! -f "/mnt/efs/oem/.mambarc" ]; then
     # A file, not a directory
     sudo touch /mnt/efs/oem/.mambarc
     sudo chown mmc /mnt/efs/oem/.mambarc
@@ -111,14 +111,24 @@ if [ ! -d "/mnt/efs/oem/.mambarc" ]; then
     sudo chgrp users /mnt/efs/oem/.mambarc
 fi
 
+# One-time case if .bashrc and .profile do not exist
 # For bashrc and profile, if they do exist, make sure they have the right permissions
 # for this setup
-if [ -d "/mnt/efs/oem/.bashrc" ]; then
+if [ ! -f "/mnt/efs/oem/.bashrc" ]; then
+    sudo touch /mnt/efs/oem/.bashrc
+fi
+if [ ! -f "/mnt/efs/oem/.profile" ]; then
+    sudo touch /mnt/efs/oem/.profile
+fi
+
+# For bashrc and profile, if they do exist, make sure they have the right permissions
+# for this setup
+if [ -f "/mnt/efs/oem/.bashrc" ]; then
     sudo chown mmc /mnt/efs/oem/.bashrc
     sudo chmod 777 /mnt/efs/oem/.bashrc
     sudo chgrp users /mnt/efs/oem/.bashrc
 fi
-if [ -d "/mnt/efs/oem/.profile" ]; then
+if [ -f "/mnt/efs/oem/.profile" ]; then
     sudo chown mmc /mnt/efs/oem/.profile
     sudo chmod 777 /mnt/efs/oem/.profile
     sudo chgrp users /mnt/efs/oem/.profile
