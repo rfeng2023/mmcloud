@@ -159,6 +159,7 @@ make_directories /mnt/efs/$FLOAT_USER
 
 # This section will rename the files under /opt/share/.pixi/bin/trampoline_configuration to point to the right location
 # This is so non-admin users will be able to use shared packages
+# Will run at the creation of any interactive job
 for file in /mnt/efs/shared/.pixi/bin/trampoline_configuration/*.json; do
     sed -i 's|/home/ubuntu/.pixi|/mnt/efs/shared/.pixi|g' "$file"
 done

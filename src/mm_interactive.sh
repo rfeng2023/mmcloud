@@ -1,4 +1,5 @@
 #!/bin/bash
+# Gao Wang and MemVerge Inc.
 
 # Set strict mode
 set -euo pipefail
@@ -18,7 +19,7 @@ mount_packages="" # For accessing one's own packages in interactive jobs
 oem_packages="" # For accessing shared packages in interactive jobs
 
 # Optional values (given by CLI) - some default values given
-declare -a additional_mounts=()
+declare -a mounts=()
 declare -a dataVolumeOption=()
 core=4
 mem=16
@@ -34,8 +35,6 @@ job_name=""
 no_mount=false
 publish="8888:8888"
 publish_set=false
-s3_path=""
-vm_path=""
 suspend_off=""
 user=""
 password=""
@@ -44,34 +43,56 @@ vm_policy="onDemand"
 # Function to display usage information
 usage() {
     echo "Usage: $0 [options]"
-    echo "Options:"
-    echo "  -o, --opcenter <ip>                   (REQUIRED) Set the OP IP address"
-    echo "  -u, --user <username>                 Set the username"
-    echo "  -p, --password <password>             Set the password"
-    echo "  -s3, --s3_path <path>                 Set the S3 path"
-    echo "  -vm, --vm_path <path>                 Set the VM path"
-    echo "  -i, --image <image>                   Set the Docker image"
-    echo "  -c, --core <cores>                    Set the number of cores"
-    echo "  -m, --mem <memory>                    Set the memory size"
+    echo "Required Options:"
+    echo "  -o, --opcenter <ip>                   Set the OP IP address"
+    echo "  -sg, --securityGroup <group>          Set the security group"
+    echo "  -g, --gateway <id>                    Set gateway"
+    echo "  -c, --core <cores>                    Set the number of cores for initial instance"
+    echo "  -m, --mem <memory>                    Set the memory size for initial instance"
+
+    echo "Required Batch Options:"
+    # TODO BATCH MODE PARAMETER
+    echo "  --job-size <value>                    Set the number of commands per job for creating virtual machines." # TODO
+
+    echo "Batch-specific Options:"
+    echo "  --cwd <value>                         Define the working directory for the job (default: ~)." # TODO
+    echo "  --download <remote>:<local>           Download files/folders from S3. Format: <S3 path>:<local path>." # TODO
+    echo "  --upload <local>:<remote>             Upload folders to S3. Format: <local path>:<S3 path>." # TODO
+    echo "  --download-include '<value>'          Use the include flag to include certain files for download (space-separated)." # TODO
+    echo "  --no-fail-fast                        Continue executing subsequent commands even if one fails." #TODO
+    echo "  --parallel-commands <value>           Set the number of commands to run in parallel (default: CPU value)." # TODO
+    echo "  --min-cores-per-command <value>       Specify the minimum number of CPU cores required per command." # TODO
+    echo "  --min-mem-per-command <value>         Specify the minimum amount of memory in GB required per command." # TODO
+
+    echo "Required Interactive Options:"
+    # TODO INTERACTIVE MODE PARAMETER
+    echo "  -efs <ip>                             Set EFS IP"
+
+    echo "Interactive-specific Options:"
+    echo "  --idle                                Amount of idle time before suspension. Only works for jupyter instances (default: 7200 seconds)"
+    echo "  --suspend-off                         For Jupyter jobs, turn off the auto-suspension feature"
+    echo "  -ide, --interactive_develop_env <env> Set the IDE"
     echo "  -pub, --publish <ports>               Set the port publishing in the form of port:port"
-    echo "  -sg, --securityGroup <group>          (REQUIRED) Set the security group"
-    echo "  -g, --gateway <id>                    (REQUIRED) Set gateway"
-    echo "  -efs <ip>                             (REQUIRED) Set EFS IP"
+    echo "  --shared-admin                        Run in admin mode to make changes to shared packages"
+    echo "  --mount-packages                      Grant the ability to use user packages"
+    echo "  --oem-packages                        Grant the ability to use shared packages"
+
+
+    echo "Global Options:"
+    echo "  -u, --user <username>                 Set the username" # Login once so do not have to login before every job submission
+    echo "  -p, --password <password>             Set the password"
+    echo "  -i, --image <image>                   Set the Docker image"
     echo "  -vp, --vmPolicy <policy>              Set the VM policy"
     echo "  -ivs, --imageVolSize <size>           Set the image volume size"
     echo "  -rvs, --rootVolSize <size>            Set the root volume size"
-    echo "  -ide, --interactive_develop_env <env> Set the IDE"
-    echo "  -am, --additional_mounts <mount>      Add additional volume mounts in the form of s3_path:vm_path,...separated by commas"
+    echo "  --ebs-mount <folder>=<size>           Mount an EBS volume to a local directory. Format: <local path>=<size>. Size in GB." #TODO
+    echo "  --mount <s3_path:vm_path>             Add S3:VM mounts separated by commas"
+    echo "  --mountOpt <value>                    Specify mount options for the bucket (required if --mount is used)." #TODO
     echo "  --no-mount                            Disable all mounting"
     echo "  -jn, --job_name <name>                Set the job name"
     echo "  --float-executable <path>             Set the path to the float executable (default: float)"
     echo "  --entrypoint <dir>                    Set entrypoint of interactive job - please give Github link"
-    echo "  --idle                                Amount of idle time before suspension. Only works for jupyter instances (default: 7200 seconds)"
-    echo "  --suspend-off                         For Jupyter jobs, turn off the auto-suspension feature"
-    echo "  --oem-admin                           Run in admin mode to make changes to batch packages (for batch job updates only)"
-    echo "  --shared-admin                        Run in admin mode to make changes to shared packages"
-    echo "  --mount-packages                      Grant the ability to use user packages"
-    echo "  --oem-packages                        Grant the ability to use shared packages"
+    #echo "  --oem-admin                           Run in admin mode to make changes to batch packages (for batch job updates only)"
     echo "  --dryrun                              Execute a dry run, printing commands without running them."
     echo "  -h, --help                            Display this help message"
 }
@@ -82,8 +103,6 @@ while [[ "$#" -gt 0 ]]; do
         -o|--opcenter) opcenter="$2"; shift ;;
         -u|--user) user="$2"; shift ;;
         -p|--password) password="$2"; shift ;;
-        -s3|--s3_path) s3_path="$2"; shift ;;
-        -vm|--vm_path) vm_path="$2"; shift ;;
         -i|--image) image="$2"; shift ;;
         -c|--core) core="$2"; shift ;;
         -m|--mem) mem="$2"; shift ;;
@@ -106,8 +125,8 @@ while [[ "$#" -gt 0 ]]; do
         --mount-packages) mount_packages=true ;;
         --oem-packages) oem_packages=true ;;
         --dryrun) dryrun=true ;;
-        -am|--additional_mounts)
-            IFS=',' read -r -a additional_mounts <<< "$2";
+        --mount)
+            IFS=',' read -r -a mounts <<< "$2";
             shift
             ;;
         -h|--help) usage; exit 0 ;;
@@ -183,6 +202,8 @@ give_tmate_warning () {
 
 # Prompt for user and password if not provided
 login() {
+    # TODO: do not login if given already
+    echo ""
     if [[ -z "$user" ]]; then
         read -p "Enter user for $opcenter: " user
     fi
@@ -215,11 +236,8 @@ determine_ports() {
 # Data volume handling
 determine_mounts() {
     if [[ $no_mount == false ]]; then
-        if [[ ! -z $s3_path ]] && [[ ! -z $vm_path ]]; then
-            dataVolumeOption=("--dataVolume" "[mode=rw,endpoint=s3.us-east-1.amazonaws.com]$s3_path:$vm_path")
-        fi
-        if [[ ${#additional_mounts[@]} -gt 0 ]]; then  # Check if additional_mounts has any elements
-            for mount in "${additional_mounts[@]}"; do
+        if [[ ${#mounts[@]} -gt 0 ]]; then  # Check if mounts has any elements
+            for mount in "${mounts[@]}"; do
                 dataVolumeOption+=("--dataVolume" "[mode=rw,endpoint=s3.us-east-1.amazonaws.com]${mount}")
             done
         fi
@@ -299,12 +317,18 @@ float_parameter_checks() {
         "--dirMap" "/mnt/efs:/mnt/efs"
         "-n" "$job_name"
         "--env" "GRANT_SUDO=yes"
-        "--env" "JUPYTER_RUNTIME_DIR=/tmp/jupyter_runtime"
-        "--env" "JUPYTER_ENABLE_LAB=TRUE"
         "--env" "VMUI=$ide"
-        "--env" "ALLOWABLE_IDLE_TIME_SECONDS=$idle_time"
         "--env" "EFS=$efs_ip"
     )
+
+    # Specific parameters for jupyter job
+    if [ $ide == "jupyter" ] || [ $ide == "jupyter-lab" ]; then
+        float_submit_args+=(
+        "--env" "JUPYTER_RUNTIME_DIR=/tmp/jupyter_runtime"
+        "--env" "JUPYTER_ENABLE_LAB=TRUE"
+        "--env" "ALLOWABLE_IDLE_TIME_SECONDS=$idle_time"
+        )
+    fi
 
     # If dataVolume is nonempty, add it in
     if (( ${#dataVolumeOption[@]} )); then
@@ -415,7 +439,8 @@ validate_modes() {
             done
         fi
         float_submit_args+=(
-        "--env" "MODE=oem_admin"
+            "--env" "MODE=oem_admin"
+            "--env" "PIXI_HOME=/mnt/efs/shared/.pixi"
         )
         host_script="host_init_batch.sh"
 
@@ -449,7 +474,8 @@ validate_modes() {
             done
         fi
         float_submit_args+=(
-        "--env" "MODE=shared_admin"
+            "--env" "MODE=shared_admin"
+            "--env" "PIXI_HOME=/mnt/efs/shared/.pixi"
         )
     fi
 }
@@ -478,6 +504,7 @@ float_parameter_checks
 validate_modes
 
 # Display the float submit command
+echo ""
 echo "#-------------"
 echo -e "${float_submit_args[*]}"
 echo "#-------------"

@@ -87,11 +87,11 @@ EOF
 # The efs_path, or first parameter in link_paths and set_paths, is the location of their .bashrc
 if [[ ${MODE} == "oem_admin" ]]; then
   # For batch jobs only - updating packages in batch mode
-  link_paths /mnt/efs/oem /home/${username} minimal
+  link_paths /mnt/efs/oem /home/${username} full
   set_paths /mnt/efs/oem oem_admin
 elif [[ ${MODE} == "shared_admin" ]]; then
   # For updating shared packages
-  link_paths /mnt/efs/shared /home/${username} minimal
+  link_paths /mnt/efs/shared /home/${username} full
   set_paths /mnt/efs/shared shared_admin
 elif [[ ${MODE} == "oem_packages" ]]; then
   # Can access shared packages but NOT user packages. Can install packages locally
