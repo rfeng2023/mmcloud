@@ -525,10 +525,10 @@ submit_each_line_with_mmfloat() {
 
 set -o errexit -o pipefail
 
-# Symlink /mnt/efs/oem folders to \${HOME} to make software available
+# Symlink /mnt/efs/shared folders to \${HOME} to make software available
 username=\$(whoami)
-ln -sf /mnt/efs/oem/.pixi /home/\${username}/.pixi
-ln -sf /mnt/efs/oem/micromamba /home/\${username}/micromamba
+ln -sf /mnt/efs/shared/.pixi /home/\${username}/.pixi
+ln -sf /mnt/efs/shared/micromamba /home/\${username}/micromamba
 export PATH="\${HOME}/.pixi/bin:\${PATH}"
 
 # Function definition for calculate_max_parallel_jobs

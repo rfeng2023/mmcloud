@@ -1,8 +1,6 @@
 #!/bin/bash
 # Gao Wang and MemVerge Inc.
 
-# Set strict mode
-set -euo pipefail
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
@@ -13,14 +11,28 @@ securityGroup=""
 efs_ip=""
 
 # Modes
-oem_admin="" # For batch jobs only
+batch_mode=""
+interactive_mode=""
+# oem_admin="" # For batch jobs only
 shared_admin="" # For updating shared packages in interactive jobs
 mount_packages="" # For accessing one's own packages in interactive jobs
 oem_packages="" # For accessing shared packages in interactive jobs
 
 # Optional values (given by CLI) - some default values given
 declare -a mounts=()
+declare -a mountOpt=()
 declare -a dataVolumeOption=()
+declare -a ebs_mount=()
+declare -a ebs_mount_size=()
+declare -a mount_local=()
+declare -a mount_remote=()
+declare -a download_local=()
+declare -a download_remote=()
+declare -a download_include=()
+declare -a upload_local=()
+declare -a upload_remote=()
+declare -a ebs_mount=()
+declare -a ebs_mount_size=()
 core=4
 mem=16
 dryrun=false
@@ -40,33 +52,52 @@ user=""
 password=""
 vm_policy="onDemand"
 
+# Batch-specific optional values
+c_min=""
+c_max=""
+m_min=""
+m_max=""
+job_size=""
+cwd="~"
+parallel_commands=""
+min_cores_per_command=0
+min_mem_per_command=0
+no_fail="|| { command_failed=1; break; }"
+no_fail_parallel="--halt now,fail=1"
+declare -a extra_parameters=()
+
 # Function to display usage information
 usage() {
+    echo ""
     echo "Usage: $0 [options]"
     echo "Required Options:"
     echo "  -o, --opcenter <ip>                   Set the OP IP address"
     echo "  -sg, --securityGroup <group>          Set the security group"
     echo "  -g, --gateway <id>                    Set gateway"
-    echo "  -c, --core <cores>                    Set the number of cores for initial instance"
-    echo "  -m, --mem <memory>                    Set the memory size for initial instance"
+    echo ""
 
     echo "Required Batch Options:"
-    # TODO BATCH MODE PARAMETER
+    echo "  --batch                               Submit at batch job"
+    echo "  -c <min>:<optional max>               Specify the exact number of CPUs to use, or, with ':', the min and max of CPUs to use."
+    echo "  -m <min>:<optional max>               Specify the exact amount of memory to use, or, with ':', the min and max of memory in GB."
     echo "  --job-size <value>                    Set the number of commands per job for creating virtual machines." # TODO
+    echo ""
 
     echo "Batch-specific Options:"
-    echo "  --cwd <value>                         Define the working directory for the job (default: ~)." # TODO
-    echo "  --download <remote>:<local>           Download files/folders from S3. Format: <S3 path>:<local path>." # TODO
+    echo "  --cwd <value>                         Define the working directory for the job (default: ~)."
+    echo "  --download <remote>:<local>           Download files/folders from S3. Format: <S3 path>:<local path> (comma-separated)." # TODO
     echo "  --upload <local>:<remote>             Upload folders to S3. Format: <local path>:<S3 path>." # TODO
-    echo "  --download-include '<value>'          Use the include flag to include certain files for download (space-separated)." # TODO
-    echo "  --no-fail-fast                        Continue executing subsequent commands even if one fails." #TODO
-    echo "  --parallel-commands <value>           Set the number of commands to run in parallel (default: CPU value)." # TODO
-    echo "  --min-cores-per-command <value>       Specify the minimum number of CPU cores required per command." # TODO
-    echo "  --min-mem-per-command <value>         Specify the minimum amount of memory in GB required per command." # TODO
+    echo "  --download-include "<value>"          Include certain files for download (space-separated), encapsulate in quotations." # TODO
+    echo "  --no-fail-fast                        Continue executing subsequent commands even if one fails."
+    echo "  --parallel-commands <value>           Set the number of commands to run in parallel (default: CPU value)."
+    echo "  --min-cores-per-command <value>       Specify the minimum number of CPU cores required per command."
+    echo "  --min-mem-per-command <value>         Specify the minimum amount of memory in GB required per command."
+    echo ""
 
     echo "Required Interactive Options:"
-    # TODO INTERACTIVE MODE PARAMETER
+    echo "  --interactive                         Submit at interactive job" # TODO
     echo "  -efs <ip>                             Set EFS IP"
+    echo ""
 
     echo "Interactive-specific Options:"
     echo "  --idle                                Amount of idle time before suspension. Only works for jupyter instances (default: 7200 seconds)"
@@ -76,18 +107,20 @@ usage() {
     echo "  --shared-admin                        Run in admin mode to make changes to shared packages"
     echo "  --mount-packages                      Grant the ability to use user packages"
     echo "  --oem-packages                        Grant the ability to use shared packages"
-
+    echo ""
 
     echo "Global Options:"
     echo "  -u, --user <username>                 Set the username" # Login once so do not have to login before every job submission
     echo "  -p, --password <password>             Set the password"
     echo "  -i, --image <image>                   Set the Docker image"
+    echo "  -c, --core <cores>                    Set the number of cores for initial instance (no min:max)"
+    echo "  -m, --mem <memory>                    Set the memory size for initial instance (no min:max)"
     echo "  -vp, --vmPolicy <policy>              Set the VM policy"
     echo "  -ivs, --imageVolSize <size>           Set the image volume size"
     echo "  -rvs, --rootVolSize <size>            Set the root volume size"
     echo "  --ebs-mount <folder>=<size>           Mount an EBS volume to a local directory. Format: <local path>=<size>. Size in GB." #TODO
-    echo "  --mount <s3_path:vm_path>             Add S3:VM mounts separated by commas"
-    echo "  --mountOpt <value>                    Specify mount options for the bucket (required if --mount is used)." #TODO
+    echo "  --mount <s3_path:vm_path>             Add S3:VM mounts, separated by commas"
+    echo "  --mountOpt <value>                    Specify mount options for the bucket (required if --mount is used) (comma-separated)." #TODO
     echo "  --no-mount                            Disable all mounting"
     echo "  -jn, --job_name <name>                Set the job name"
     echo "  --float-executable <path>             Set the path to the float executable (default: float)"
@@ -98,17 +131,42 @@ usage() {
 }
 
 # Parse command line options
-while [[ "$#" -gt 0 ]]; do
-    case $1 in
+while (( "$#" )); do
+  case "$1" in
         -o|--opcenter) opcenter="$2"; shift ;;
         -u|--user) user="$2"; shift ;;
         -p|--password) password="$2"; shift ;;
         -i|--image) image="$2"; shift ;;
-        -c|--core) core="$2"; shift ;;
-        -m|--mem) mem="$2"; shift ;;
-        -pub|--publish) publish="$2"; publish="$2"; publish_set=true; shift ;;
         -sg|--securityGroup) securityGroup="$2"; shift ;;
         -g|--gateway) gateway="$2"; shift ;;
+        -c|--core)
+            # If a ":" is given, then it is specifying a min:max for batch jobs
+            if [[ "$2" =~ ":" ]]; then
+                c_min=$(echo "$2" | cut -d':' -f1)
+                c_max=$(echo "$2" | cut -d':' -f2)
+            else
+                c_min="$2"
+                c_max=""
+                core="$2" # For interactive job
+            fi
+            parallel_commands=$c_min  # Default parallel commands to min CPU if not specified
+            shift 
+            ;;
+        -m|--mem)
+            if [[ "$2" =~ ":" ]]; then
+                m_min=$(echo "$2" | cut -d':' -f1)
+                m_max=$(echo "$2" | cut -d':' -f2)
+            if [ -n "$m_max" ]; then
+                m_max=":${m_max}"
+            fi
+            else
+                m_min="$2"
+                m_max=""
+                mem="$2" # For interactive job
+            fi
+            shift 
+            ;;
+        -pub|--publish) publish="$2"; publish="$2"; publish_set=true; shift ;;
         -efs) efs_ip="$2"; shift ;;
         -vp|--vmPolicy) vm_policy="$2"; shift ;;
         -ivs|--imageVolSize) image_vol_size="$2"; shift ;;
@@ -120,28 +178,76 @@ while [[ "$#" -gt 0 ]]; do
         --entrypoint) entrypoint="$2"; shift ;;
         --idle) idle_time="$2"; shift ;;
         --suspend-off) suspend_off=true ;;
-        --oem-admin) oem_admin=true ;;
         --shared-admin) shared_admin=true ;;
         --mount-packages) mount_packages=true ;;
         --oem-packages) oem_packages=true ;;
         --dryrun) dryrun=true ;;
-        --mount)
-            IFS=',' read -r -a mounts <<< "$2";
+        --parallel-commands) parallel_commands="$2"; shift ;;
+        --min-cores-per-command) min_cores_per_command="$2"; shift ;;
+        --min-mem-per-command) min_mem_per_command="$2"; shift ;;
+        --batch) batch_mode="true" ;;
+        --interactive) interactive_mode="true" ;;
+        --job-size) job_size="$2"; shift ;;
+        --cwd) cwd="$2"; shift ;;
+        --no-fail-fast) no_fail="|| true"; no_fail_parallel="--halt never || true" ;;
+        --ebs-mount)
+            IFS=',' read -ra mount_pairs <<< "$2" # Split input by commas
+            for pair in "${mount_pairs[@]}"; do
+                if [[ "$pair" == *=* ]]; then
+                    IFS='=' read -r dir size <<< "$pair"
+                    if [[ -n "$dir" && -n "$size" ]]; then
+                        ebs_mount+=("$dir")
+                        ebs_mount_size+=("$size")
+                    fi
+                fi
+            done
+            shift
+            ;;
+        --download-include)
+            IFS='' read -ra INCLUDE <<< "$2"
+            # Will get split up in create_download_commands
+            download_include+=("${INCLUDE[0]}")
+            shift
+            ;;
+        --mount|--download|--upload)
+            current_flag="$1"
+            IFS=',' read -ra PARTS <<< "$2"
+            for pair in "${PARTS[@]}"; do
+                if [[ "$pair" == *:* ]]; then
+                    IFS=':' read -r source dest <<< "$pair"
+                    if [ "$current_flag" == "--mount" ]; then
+                        mount_remote+=("$source")
+                        mount_local+=("$dest")
+                    elif [ "$current_flag" == "--download" ]; then
+                        download_remote+=("$source")
+                        download_local+=("$dest")
+                    elif [ "$current_flag" == "--upload" ]; then
+                        upload_remote+=("$dest")
+                        upload_local+=("$source")
+                    fi
+                fi
+            done
+            shift
+            ;;
+        --mountOpt)
+            IFS=',' read -ra MOUNT <<< "$2"
+            for mount in "${MOUNT[@]}"; do
+                mountOpt+=("$mount")
+            done
             shift
             ;;
         -h|--help) usage; exit 0 ;;
-        *) echo "Unknown parameter passed: $1"; usage; exit 1 ;;
+        *) echo "Unknown parameter passed: $1"; exit 1 ;; # TODO put usage back in
     esac
     shift
 done
 
-# Now that all variables are initialized, we can set -u
-set -u
-
 # Check required parameters are given
 check_required_params() {
-    missing_params=""
-    is_missing=false
+    # Check for missing params
+    local missing_params=""
+    local is_missing=false
+
     if [ -z "$opcenter" ]; then
         missing_params+="-o, "
         is_missing=true
@@ -154,13 +260,424 @@ check_required_params() {
         missing_params+="-sg, "
         is_missing=true
     fi
+    missing_params=${missing_params%, }
+    if [ "$is_missing" = true ]; then
+        echo "Error: Missing required parameters: $missing_params" >&2
+        usage
+        exit 1
+    fi
+}
+
+# Prompt for user and password if not provided
+login() {
+    echo ""
+    if [[ -z "$user" ]]; then
+        read -p "Enter user for $opcenter: " user
+    fi
+    if [[ -z "$password" ]]; then
+        read -sp "Enter password for $opcenter: " password
+        echo ""
+    fi
+    "$float_executable" login -a "$opcenter" -u "$user" -p "$password"
+}
+
+# # # Helper functions for batch jobs # # #
+# If in batch mode, check params
+check_required_batch_params() {
+    local missing_params=""
+    local is_missing=false
+
+    if [ -z "$c_min" ]; then
+        missing_params+="-c, "
+        is_missing=true
+    fi
+    if [ -z "$m_min" ]; then
+        missing_params+="-m, "
+        is_missing=true
+    fi
+    if [ -z "$job_size" ]; then
+        missing_params+="--job-size, "
+        is_missing=true
+    fi
+    if [[ ${#mount_local[@]} -gt 0 && ${#mountOpt[@]} -eq 0 ]]; then
+        missing_params+="--mountOpt (required with --mount), "
+        is_missing=true
+    fi
+
+    # Remove trailing comma and space
+    missing_params=${missing_params%, }
+
+    if [ "$is_missing" = true ]; then
+        echo "Error: Missing required batch parameters: $missing_params" >&2
+        usage
+        exit 1
+    fi
+
+    # Additional check for --parallel-commands when --min-cores-per-command or --min-mem-per-command is specified
+    if [[ "$min_cores_per_command" -gt 0 || "$min_mem_per_command" -gt 0 ]] && [[ "$parallel_commands" -gt 0 ]]; then
+        echo "Error: --parallel-commands must be set to 0 for automatic determination when --min-cores-per-command or --min-mem-per-command is specified."
+        exit 1
+    fi
+
+    # Check for overlapping directories between ebs_mount and mount_local
+    if (( ${#ebs_mount[@]} )) && (( ${#mount_local[@]} )); then
+        for mount_dir in "${ebs_mount[@]}"; do
+            for local_dir in "${mount_local[@]}"; do
+                if [ "$mount_dir" == "$local_dir" ]; then
+                    echo "Error: Overlapping directories found in ebs_mount and mount_local: $mount_dir"
+                    exit 1
+                fi
+            done
+        done
+    fi
+
+    # Check for overlapping directories between download_local and mount_local
+    if (( ${#download_local[@]} )) && (( ${#mount_local[@]} )); then
+        for download_dir in "${download_local[@]}"; do
+            for mount_dir in "${mount_local[@]}"; do
+                if [ "$download_dir" == "$mount_dir" ]; then
+                    echo "Error: Overlapping directories found in download_local and mount_local: $download_dir"
+                    exit 1
+                fi
+            done
+        done  
+    fi
+}
+
+create_download_commands() {
+  local download_cmd=""
+
+  # if [ ${#downloadOpt[@]} -eq 0 ]; then
+    for i in "${!download_local[@]}"; do
+      # If local folder has a trailing slash, we are copying into a folder, therefore we make the folder
+      if [[ ${download_local[$i]} =~ /$ ]]; then
+        download_cmd+="mkdir -p ${download_local[$i]%\/}\n"
+      fi
+      download_cmd+="aws s3 cp s3://${download_remote[$i]} ${download_local[$i]} --recursive"
+
+      # Separate include commands with space
+      if [ ${#download_include[@]} -gt 0 ]; then
+        # Split by space
+        IFS=' ' read -ra INCLUDES <<< "${download_include[$i]}"
+        if [ ${#INCLUDES[@]} -gt 0 ]; then
+          # If an include command is used, we want to make sure we don't include the entire folder
+          download_cmd+=" --exclude '*'"
+        fi
+        for j in "${!INCLUDES[@]}"; do
+          download_cmd+=" --include '${INCLUDES[$j]}'"
+        done
+      fi
+      download_cmd+="\n"
+    done
+
+  download_cmd=${download_cmd%\\n}
+  echo -e $download_cmd
+}
+
+create_upload_commands() {
+  local upload_cmd=""
+
+  # If no uploadOpt option, just create upload commands
+  if [ ${#uploadOpt[@]} -eq 0 ]; then
+    for i in "${!upload_local[@]}"; do
+        upload_cmd+="mkdir -p ${upload_local[$i]%\/}\n"
+        local upload_folder=${upload_remote[$i]%\/}
+        if [[ ${upload_local[$i]} =~ /$ ]]; then
+          upload_cmd+="aws s3 sync ${upload_local[$i]} s3://${upload_folder}\n"
+        else  
+          local last_folder=$(basename "${upload_local[$i]}")
+          upload_cmd+="aws s3 sync ${upload_local[$i]} s3://${upload_folder}/$last_folder\n"
+        fi
+    done
+  fi
+
+  upload_cmd=${upload_cmd%\\n}
+  echo -e $upload_cmd
+}
+
+mount_buckets() {
+  local dataVolume_cmd=""
+
+  # If just one mount option, use the same one for all bucket mounting
+  if [ ${#mountOpt[@]} -eq 1 ]; then
+    for i in "${!mount_local[@]}"; do
+        dataVolume_cmd+="--dataVolume '[$mountOpt,endpoint=s3.us-east-1.amazonaws.com]s3://${mount_remote[$i]}:${mount_local[$i]}' "
+    done
+
+  # If more than one mount option, we expect there to be the same number of mounted buckets
+  else
+    if [ ${#mountOpt[@]} -eq  ${#mount_local[@]} ]; then
+      for i in "${!mountOpt[@]}"; do
+            dataVolume_cmd+="--dataVolume '[${mountOpt[$i]},endpoint=s3.us-east-1.amazonaws.com]s3://${mount_remote[$i]}:${mount_local[$i]}' "
+      done
+    else
+      # Number of mountOptions > 1 and dne number of buckets
+      echo -e "\n[ERROR] If there are multiple mount options, please provide the same number of mount options and same number of buckets\n"
+      exit 1
+    fi
+  fi
+
+  echo -e $dataVolume_cmd
+}
+
+mount_volumes() {
+  local volumeMount_cmd=""
+
+  for i in "${!ebs_mount[@]}"; do
+    local folder="${ebs_mount[i]}"
+    local size="${ebs_mount_size[i]}"
+
+    volumeMount_cmd+="--dataVolume '[size=$size]:$folder' "
+  done
+
+  echo -e $volumeMount_cmd
+}
+
+calculate_max_parallel_jobs() {
+    # Required minimum resources per job
+    min_cores_per_cmd=$1  # Minimum CPU cores required per job
+    min_mem_per_cmd=$2    # Minimum memory required per job in GB
+
+    # Available system resources
+    available_cores=$(lscpu | grep "CPU(s):" | head -n 1 | awk '{print $2}')  # Total available CPU cores
+    # available_memory_gb=$(free -m | grep Mem: | awk '{print $2}' | awk '{print int($1/1024)}')
+    available_memory_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+    available_memory_gb=$((available_memory_kb / 1024 / 1024))
+
+    # Initialize max_parallel_jobs to default parallen_commands
+    max_parallel_jobs=$3
+    max_jobs_by_cpu=0
+    max_jobs_by_mem=0
+
+    # Calculate the maximum number of jobs based on CPU constraints, if applicable
+    if [ -n "$min_cores_per_cmd" ] && [ "$min_cores_per_cmd" -gt 0 ]; then
+        max_jobs_by_cpu=$((available_cores / min_cores_per_cmd))
+        if [ "$max_jobs_by_cpu" -eq 0 ]; then
+            max_jobs_by_cpu=1  # Ensure at least 1 job can run if the division results in 0
+        fi
+    fi
+
+    # Calculate the maximum number of jobs based on memory constraints, if applicable
+    if [ -n "$min_mem_per_cmd" ] && [ "$min_mem_per_cmd" -gt 0 ]; then
+        max_jobs_by_mem=$((available_memory_gb / min_mem_per_cmd))
+        if [ "$max_jobs_by_mem" -eq 0 ]; then
+            max_jobs_by_mem=1  # Ensure at least 1 job can run if the division results in 0
+        fi
+    fi
+
+    # Determine the maximum number of parallel jobs based on the more restrictive resource (CPU or memory)
+    if [ "$max_jobs_by_cpu" -gt 0 ] && [ "$max_jobs_by_mem" -gt 0 ]; then
+        max_parallel_jobs=$(( max_jobs_by_cpu < max_jobs_by_mem ? max_jobs_by_cpu : max_jobs_by_mem ))
+    elif [ "$max_jobs_by_cpu" -gt 0 ]; then
+        max_parallel_jobs=$max_jobs_by_cpu
+    elif [ "$max_jobs_by_mem" -gt 0 ]; then
+        max_parallel_jobs=$max_jobs_by_mem
+    fi
+
+    if [ "$max_parallel_jobs" -eq 0 ]; then
+        max_parallel_jobs=1
+    fi
+
+    echo -e $available_cores $available_memory_gb $max_parallel_jobs
+}
+
+submit_each_line_with_mmfloat() {
+    local script_file="$1"
+    local download_cmd=""
+    local upload_cmd=""
+    local download_mkdir=""
+    local upload_mkdir=""
+    local dataVolume_params=""
+
+    # Check if the script file exists
+    if [ ! -f "$script_file" ]; then
+        echo "Script file does not exist: $script_file"
+        return 1
+    fi
+
+    # Check if the script file is empty
+    if [ ! -s "$script_file" ]; then
+        echo "Script file is empty: $script_file"
+        return 0
+    fi
+
+    # Only create download and upload commands if there are corresponding parameters
+    if [ ${#download_local[@]} -ne 0 ]; then
+        download_cmd=$(create_download_commands)
+    fi
+    if [ ${#upload_local[@]} -ne 0 ]; then
+        upload_cmd=$(create_upload_commands)
+    fi
+
+    # Separate out the mkdir commands
+    download_mkdir=$(echo -e "$download_cmd" | grep 'mkdir')
+    upload_mkdir=$(echo -e "$upload_cmd" | grep 'mkdir')
+    # Remove mkdir commands from the original command
+    download_cmd=$(echo -e "$download_cmd" | grep -v 'mkdir')
+    upload_cmd=$(echo -e "$upload_cmd" | grep -v 'mkdir')
+
+    # Mount bucket(s) with provided mount options
+    dataVolume_params=$(mount_buckets)
+
+    # Mount volume(s)
+    volume_params=$(mount_volumes)
+
+    # Read all lines from the script file into an array
+    all_commands=()
+    total_commands=0
+    while IFS= read -r line; do
+        if [ -z "$line" ]; then
+            continue  # Skip empty lines
+        fi
+        all_commands+=("$line")
+        total_commands=$(( total_commands + 1))  
+    done < <(sed -e '$a\' $script_file) # always add a newline to the end of file before sending it in
+
+    # Divide the commands into jobs based on job-size
+    num_jobs=$(( ($total_commands + $job_size - 1) / $job_size )) # Ceiling division
+
+    # Determine VM Policy
+    local lowercase_vm_policy=$(echo "$vm_policy" | tr '[:upper:]' '[:lower:]')
+    if [ $lowercase_vm_policy == "spotonly" ]; then
+      vm_policy_command="[spotOnly=true]"
+    elif [ $lowercase_vm_policy == "ondemand" ]; then
+      vm_policy_command="[onDemand=true]"
+    elif [ $lowercase_vm_policy == "spotfirst" ]; then
+      vm_policy_command="[spotFirst=true]"
+    else
+      echo "Invalid VM Policy setting '$vm_policy'. Please use 'spotOnly', 'onDemand', or 'spotFirst'"
+      return 1
+    fi
+
+    # Loop to create job submission commands
+    for (( j = 0; j < $num_jobs; j++ )); do
+        full_cmd=""
+        # Using a sliding-window effect, take the next job_size number of jobs
+        start=$(($j * $job_size))
+        end=$(($start + $job_size - 1))
+
+        commands=()
+        i=$start
+        while [[ $i -le $end && $i -lt ${#all_commands[*]} ]]; do
+          commands+=("\"${all_commands[$i]}\"")
+          i=$(( i + 1 ))
+        done
+
+        if [ "$dryrun" = true ]; then
+            full_cmd+="#-------------\n"
+        fi
+        # Create the job script using heredoc
+        calculate_max_parallel_jobs_def=$(declare -f calculate_max_parallel_jobs)
+        job_script=$(cat << EOF
+#!/bin/bash
+
+set -o errexit -o pipefail
+
+# Symlink /mnt/efs/shared folders to \${HOME} to make software available
+username=\$(whoami)
+ln -sf /mnt/efs/shared/.pixi /home/\${username}/.pixi
+ln -sf /mnt/efs/shared/micromamba /home/\${username}/micromamba
+export PATH="\${HOME}/.pixi/bin:\${PATH}"
+
+# Function definition for calculate_max_parallel_jobs
+${calculate_max_parallel_jobs_def}
+
+# Create directories if they don't exist for download
+${download_mkdir}
+# Create directories if they don't exist for upload
+${upload_mkdir}
+# Create directories if they don't exist for cwd
+mkdir -p ${cwd}
+
+# Execute the download commands to fetch data from S3
+${download_cmd}
+
+# Change to the specified working directory
+cd ${cwd}
+
+# Compute parallel command numbers based on runtime values
+read available_cores available_memory_gb num_parallel_commands < <(calculate_max_parallel_jobs ${min_cores_per_command} ${min_mem_per_command} ${parallel_commands})
+echo "Available CPU cores: \$available_cores"
+echo "Available Memory: \$available_memory_gb GB"
+echo "Maximum parallel jobs: \$num_parallel_commands"
+
+# Initialize a flag to track command success, which can be changed in no_fail
+command_failed=0
+
+# Conditional execution based on num_parallel_commands and also length of commands
+commands_to_run=(${commands[@]})
+if [[ \$num_parallel_commands -gt 1 && ${#commands[*]} -gt 1 ]]; then
+    printf "%%s\\\\n" "\${commands_to_run[@]}"  | parallel -j \$num_parallel_commands ${no_fail_parallel}
+else
+    printf "%%s\\\\n" "\${commands_to_run[@]}" | while IFS= read -r cmd; do
+        eval \$cmd ${no_fail}
+    done
+fi
+
+# Always execute the upload commands to upload data to S3
+${upload_cmd}
+
+# Check if any command failed
+if [ \$command_failed -eq 1 ]; then
+    exit 1
+fi
+EOF
+)
+        if [ "$dryrun" = true ]; then
+            job_filename=${script_file%.*}_"$j".mmjob.sh 
+        else
+            mkdir -p ${TMPDIR:-/tmp}/${script_file%.*}
+            job_filename=${TMPDIR:-/tmp}/${script_file%.*}/$j.mmjob.sh
+        fi
+        printf "$job_script" > $job_filename 
+        full_cmd+="$float_executable submit -a $opcenter \n\
+        -i '$image' \n\
+        -j $job_filename \n\
+        -c $c_min$c_max \n\
+        -m $m_min$m_max \n\
+        --hostInit $script_dir/host_init_batch.sh \n\
+        --dirMap /mnt/efs:/mnt/efs \n\
+        --withRoot \n\
+        --vmPolicy $vm_policy_command \n\
+        --imageVolSize $imageVolSize \n\
+        --rootVolSize $rootVolSize \n\
+        --securityGroup sg-02867677e76635b25 \n\
+        $dataVolume_params \n\
+        $volume_params"
+
+        # Added extra parameters if given
+        for param in "${extra_parameters[@]}"; do
+          full_cmd+=" $param"
+        done
+
+        full_cmd=${full_cmd%\ }
+
+        # Execute or echo the full command
+        if [ "$dryrun" = true ]; then
+            echo -e "${full_cmd}"
+        else
+            jobid=$(eval "$full_cmd" | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}')
+            echo "Job ID: $jobid"
+            rm -rf ${TMPDIR:-/tmp}/${script_file%.*}
+        fi
+    done 
+}
+
+###########################################
+
+# # # Helper functions for interactive jobs # # #
+# If in interactive mode, check params
+check_required_interactive_params(){
+    # Check for missing interactive params
+    missing_params=""
+    is_missing=false
     if [ -z "$efs_ip" ]; then
         missing_params+="-efs, "
         is_missing=true
     fi
     missing_params=${missing_params%, }
     if [ "$is_missing" = true ]; then
-        echo "Error: Missing required parameters: $missing_params" >&2
+        echo "Error: Missing required interactive parameters: $missing_params" >&2
         usage
         exit 1
     fi
@@ -199,21 +716,6 @@ give_tmate_warning () {
     done
     fi
 }
-
-# Prompt for user and password if not provided
-login() {
-    # TODO: do not login if given already
-    echo ""
-    if [[ -z "$user" ]]; then
-        read -p "Enter user for $opcenter: " user
-    fi
-    if [[ -z "$password" ]]; then
-        read -sp "Enter password for $opcenter: " password
-        echo ""
-    fi
-    "$float_executable" login -a "$opcenter" -u "$user" -p "$password"
-}
-
 # Adjust publish port if not set by user and by ide
 determine_ports() {
     if [[ "$publish_set" == false && "$ide" == "rstudio" ]]; then
@@ -364,13 +866,10 @@ float_parameter_checks() {
 
 # Validate mode combinations
 validate_modes() {
-    if [[ -z "$oem_admin" && -z "$shared_admin" && -z "$mount_packages" && -z "$oem_packages" ]]; then
-        echo "Error: At least one of --oem-admin, --shared-admin, --mount-packages, or --oem-packages must be provided."
+    if [[ -z "$shared_admin" && -z "$mount_packages" && -z "$oem_packages" ]]; then
+        echo "Error: At least one of --shared-admin, --mount-packages, or --oem-packages must be provided."
         exit 1
-    elif [[ -n "$oem_admin" && (-n "$shared_admin" || -n "$mount_packages" || -n "$oem_packages") ]]; then
-        echo "Error: --oem-admin cannot be used the other modes."
-        exit 1
-    elif [[ -n "$shared_admin" && (-n "$oem_admin" || -n "$mount_packages" || -n "$oem_packages") ]]; then
+    elif [[ -n "$shared_admin" && (-n "$mount_packages" || -n "$oem_packages") ]]; then
         echo "Error: --shared-admin cannot be used the other modes."
         exit 1
     fi
@@ -388,62 +887,6 @@ validate_modes() {
         float_submit_args+=(
             "--env" "MODE=oem_packages"
         )
-    elif [[ -n "$oem_admin" ]]; then
-        echo ""
-        echo -e "${RED}WARNING: ${NC}Make sure the specified EFS IP corresponds to the batch EFS, as ${RED}--oem-admin${NC} mode requires the ${RED}batch EFS${NC}."
-        while true; do
-                echo -e "Is your EFS IP correct (y/N)? \c"
-                read input
-                input=${input:-n}  # Default to "n" if no input is given
-                case $input in
-                    [yY])
-                        break
-                        ;;
-                    [nN]) 
-                        # If warning is not accepted, exit the script
-                        echo "Exiting the script."
-                        exit 0
-                        ;;
-                    *) 
-                        echo "Invalid input. Please enter 'y' or 'n'."
-                        ;;
-                esac
-            done
-
-        running_batch_jobs=$($float_executable list -a $batch_opcenter -u $user -p $password -f "status=Executing or status=Floating or status=Suspended or status=Suspending or status=Starting or status=Initializing" | awk '{print $4}' | grep -v -e '^$' -e 'NAME' || true) 
-        if [[ ! -z $running_batch_jobs ]]; then
-            batch_job_count=$(echo "$running_batch_jobs" | wc -l)
-        else
-            batch_job_count=0
-        fi
-        if [[ $batch_job_count -gt 0 ]]; then
-            echo ""
-            echo -e "${RED}WARNING: ${NC}There are ${batch_job_count} batch jobs running. Updating packages in the batch setup could lead to checkpoint failures."
-            while true; do
-                echo -e "Do you wish to proceed (y/N)? \c"
-                read input
-                input=${input:-n}  # Default to "n" if no input is given
-                case $input in
-                    [yY])
-                        break
-                        ;;
-                    [nN]) 
-                        # If warning is not accepted, exit the script
-                        echo "Exiting the script."
-                        exit 0
-                        ;;
-                    *) 
-                        echo "Invalid input. Please enter 'y' or 'n'."
-                        ;;
-                esac
-            done
-        fi
-        float_submit_args+=(
-            "--env" "MODE=oem_admin"
-            "--env" "PIXI_HOME=/mnt/efs/shared/.pixi"
-        )
-        host_script="host_init_batch.sh"
-
     elif [[ -n "$shared_admin" ]]; then
         running_int_jobs=$($float_executable list -a $opcenter -f "status=Executing or status=Floating or status=Suspended or status=Suspending or status=Starting or status=Initializing" | awk '{print $4}' | grep -v -e '^$' -e 'NAME' || true)
         if [[ ! -z $running_int_jobs ]]; then
@@ -480,52 +923,7 @@ validate_modes() {
     fi
 }
 
-# Local variables not affected by CLI
-host_script="host_init_interactive.sh"
-float_submit_args=(
-    "$float_executable" "submit"
-)
-batch_opcenter=3.82.198.55 # Hard-coded for now - only used when running oem-admin mode
-
-# Call commands
-check_required_params
-script_dir=$(find_script_dir)
-give_tmate_warning
-login
-determine_ports
-determine_mounts
-determine_vm_policy
-
-# Existing job checks
-determine_running_jobs
-
-# Build float command
-float_parameter_checks
-validate_modes
-
-# Display the float submit command
-echo ""
-echo "#-------------"
-echo -e "${float_submit_args[*]}"
-echo "#-------------"
-
-# Submit the job and retrieve job ID
-# Execute or echo the full command
-if [ "$dryrun" = true ]; then
-    exit 0
-else
-    float_submit_output=$(echo "yes" | "${float_submit_args[@]}")
-    jobid=$(echo "$float_submit_output" | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}' || true)
-fi
-if [[ -z "$jobid" ]]; then
-    echo "Error returned from float submission command! Exiting..."
-    exit 1
-fi
-echo ""
-echo "JOB ID: $jobid"
-
-# Helper functions
-# No other echo needed as just getting IP_ADDRESS
+# For interactive jobs - get gateway IP of job
 get_public_ip() {
     local jobid="$1"
     local IP_ADDRESS=""
@@ -539,6 +937,7 @@ get_public_ip() {
     done
 }
 
+# For interactive jobs - get tmate url
 get_tmate_session() {
     local jobid="$1"
     echo "[$(date)]: Waiting for the job to execute and retrieve tmate web session (~5min)..."
@@ -561,6 +960,7 @@ get_tmate_session() {
     done
 }
 
+# For interactive jobs - get jupyter link and token
 get_jupyter_token() {
     local jobid="$1"
     local ip_address="$2"
@@ -586,35 +986,114 @@ get_jupyter_token() {
     done
 }
 
-# Wait for the job to execute and retrieve connection info
-case "$ide" in
-    tmate)
-        IP_ADDRESS=$(get_public_ip "$jobid")
-        get_tmate_session "$jobid"
-        ;;
-    jupyter|jupyter-lab)
-        IP_ADDRESS=$(get_public_ip "$jobid")
-        get_jupyter_token "$jobid" "$IP_ADDRESS"
-        ;;
-    rstudio)
-        IP_ADDRESS=$(get_public_ip "$jobid")
-        echo "To access RStudio Server, navigate to http://$IP_ADDRESS in your web browser."
-        echo "Please give the instance about 5 minutes to start RStudio"
-        echo "RStudio Server URL: http://$IP_ADDRESS" > "${jobid}_rstudio.log"
-        ;;
-    vscode)
-        IP_ADDRESS=$(get_public_ip "$jobid")
-        echo "To access code-server, navigate to http://$IP_ADDRESS in your web browser."
-        echo "Please give the instance about 5 minutes to start vscode"
-        echo "code-server URL: http://$IP_ADDRESS" > "${jobid}_code-server.log"
-        ;;
-    *)
-        echo "Unrecognized IDE specified: $ide"
-        ;;
-esac
+# Submit job
+submit_interactive_job() {
+    # Display the float submit command
+    echo ""
+    echo "#-------------"
+    echo -e "${float_submit_args[*]}"
+    echo "#-------------"
 
-# Output suspend command
-suspend_command="$float_executable suspend -j $jobid"
-echo "Suspend your environment when you do not need it by running:"
-echo "$suspend_command"
-echo "$suspend_command" >> "${jobid}_${ide}.log"
+    # Submit the job and retrieve job ID
+    # Execute or echo the full command
+    if [ "$dryrun" = true ]; then
+        exit 0
+    else
+        float_submit_output=$(echo "yes" | "${float_submit_args[@]}")
+        jobid=$(echo "$float_submit_output" | grep 'id:' | awk -F'id: ' '{print $2}' | awk '{print $1}' || true)
+    fi
+    if [[ -z "$jobid" ]]; then
+        echo "Error returned from float submission command! Exiting..."
+        exit 1
+    fi
+    echo ""
+    echo "JOB ID: $jobid"
+
+    # Wait for the job to execute and retrieve connection info
+    case "$ide" in
+        tmate)
+            IP_ADDRESS=$(get_public_ip "$jobid")
+            get_tmate_session "$jobid"
+            ;;
+        jupyter|jupyter-lab)
+            IP_ADDRESS=$(get_public_ip "$jobid")
+            get_jupyter_token "$jobid" "$IP_ADDRESS"
+            ;;
+        rstudio)
+            IP_ADDRESS=$(get_public_ip "$jobid")
+            echo "To access RStudio Server, navigate to http://$IP_ADDRESS in your web browser."
+            echo "Please give the instance about 5 minutes to start RStudio"
+            echo "RStudio Server URL: http://$IP_ADDRESS" > "${jobid}_rstudio.log"
+            ;;
+        vscode)
+            IP_ADDRESS=$(get_public_ip "$jobid")
+            echo "To access code-server, navigate to http://$IP_ADDRESS in your web browser."
+            echo "Please give the instance about 5 minutes to start vscode"
+            echo "code-server URL: http://$IP_ADDRESS" > "${jobid}_code-server.log"
+            ;;
+        *)
+            echo "Unrecognized IDE specified: $ide"
+            ;;
+    esac
+
+    # Output suspend command
+    suspend_command="$float_executable suspend -j $jobid"
+    echo "Suspend your environment when you do not need it by running:"
+    echo "$suspend_command"
+    echo "$suspend_command" >> "${jobid}_${ide}.log"
+
+}
+#################################################
+
+# --- MAIN SECTION ---
+# Local variables not affected by CLI
+host_script="host_init_interactive.sh"
+float_submit_args=(
+    "$float_executable" "submit"
+)
+
+check_required_params
+# Check if in batch or interactive mode
+if [[ ("$batch_mode" == "true" && "$interactive_mode" == "true") || 
+      ("$batch_mode" != "true" && "$interactive_mode" != "true") ]]; then
+    echo "Error: Please specify either --batch or --interactive."
+    exit 1
+# Start batch mode if batch_mode is true
+elif [[ "$batch_mode" == "true" ]]; then
+    echo "Starting batch mode..."
+    check_required_batch_params
+
+    script_dir=$(find_script_dir)
+    login
+
+    # Setup up batch submission
+    create_download_commands
+    create_upload_commands
+    mount_buckets
+    mount_volumes
+    calculate_max_parallel_jobs
+    
+    # Submit job
+    submit_each_line_with_mmfloat
+
+# Start interactive mode if interactive_mode is true
+elif [[ "$interactive_mode" == "true" ]]; then
+    echo "Starting interactive mode..."
+    check_required_interactive_params
+    script_dir=$(find_script_dir)
+    give_tmate_warning
+    login
+    determine_ports
+    determine_mounts
+    determine_vm_policy
+
+    # Existing job checks
+    determine_running_jobs
+
+    # Build float command
+    float_parameter_checks
+    validate_modes
+
+    # Submit interactive job
+    submit_interactive_job
+fi

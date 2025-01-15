@@ -110,6 +110,11 @@ else
   exit 1
 fi
 
+# init.sh run after it is updated
+curl -O https://raw.githubusercontent.com/gaow/misc/refs/heads/master/bash/pixi/init.sh
+chmod +x init.sh
+./init.sh
+
 # Run entrypoint if given
 if [[ ! -z "$ENTRYPOINT" ]]; then
     ${ENTRYPOINT}
