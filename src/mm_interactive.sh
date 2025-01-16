@@ -75,7 +75,7 @@ usage() {
     echo ""
 
     echo "Required Batch Options:"
-    echo "  --batch                               Submit at batch job"
+    echo "  --batch                               Submit a batch job"
     echo "  --job-script <file>                   Main job script to be run on MMC."                          
     echo "  -c <min>:<optional max>               Specify the exact number of CPUs to use, or, with ':', the min and max of CPUs to use."
     echo "  -m <min>:<optional max>               Specify the exact amount of memory to use, or, with ':', the min and max of memory in GB."
@@ -101,7 +101,7 @@ usage() {
     echo ""
 
     echo "Interactive-specific Options:"
-    echo "  --idle                                Amount of idle time before suspension. Only works for jupyter instances (default: 7200 seconds)"
+    echo "  --idle <seconds>                      Amount of idle time before suspension. Only works for jupyter instances (default: 7200 seconds)"
     echo "  --suspend-off                         For Jupyter jobs, turn off the auto-suspension feature"
     echo "  -ide, --interactive_develop_env <env> Set the IDE"
     echo "  -pub, --publish <ports>               Set the port publishing in the form of port:port"
