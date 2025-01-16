@@ -103,7 +103,7 @@ usage() {
     echo "Interactive-specific Options:"
     echo "  --idle <seconds>                      Amount of idle time before suspension. Only works for jupyter instances (default: 7200 seconds)"
     echo "  --suspend-off                         For Jupyter jobs, turn off the auto-suspension feature"
-    echo "  -ide, --interactive_develop_env <env> Set the IDE"
+    echo "  -ide, --interactive-develop-env <env> Set the IDE"
     echo "  -pub, --publish <ports>               Set the port publishing in the form of port:port"
     echo "  --entrypoint <dir>                    Set entrypoint of interactive job - please give Github link"
     echo ""
@@ -167,7 +167,7 @@ while (( "$#" )); do
         -vp|--vmPolicy) vm_policy="$2"; shift ;;
         -ivs|--imageVolSize) image_vol_size="$2"; shift ;;
         -rvs|--rootVolSize) root_vol_size="$2"; shift ;;
-        -ide|--interactive_develop_env) ide="$2"; shift ;;
+        -ide|--interactive-develop-env) ide="$2"; shift ;;
         -jn|--job-name) job_name="$2"; shift ;;
         --float-executable) float_executable="$2"; shift ;;
         --entrypoint) entrypoint="$2"; shift ;;
@@ -767,7 +767,7 @@ EOF
         -j $job_filename \n\
         -c $c_min$c_max \n\
         -m $m_min$m_max \n\
-        --hostInit $script_dir/host_init_batch.sh \n\
+        --hostInit $script_dir/host_init_interactive.sh \n\
         --dirMap /mnt/efs:/mnt/efs \n\
         --withRoot \n\
         --vmPolicy $vm_policy_command \n\
