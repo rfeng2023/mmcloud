@@ -17,8 +17,9 @@ username=aw3600
  -g g-sidlpgb7oi9p48kxycpmn \
  -sg sg-02867677e76635b25 \
  -efs 10.1.10.210 \
- --batch \
  --job-script ./example/commands_to_submit.txt \
+--oem-packages \
+ --mount-packages \
  -c 2 -m 16 \
  --job-size 100 \
  --mount "statfungen/ftp_fgc_xqtl:/home/$username/data,statfungen/ftp_fgc_xqtl/sos_cache/$username:/home/$username/.sos,statfungen/ftp_fgc_xqtl/analysis_result/finemapping_twas:/home/$username/output" \
@@ -35,8 +36,8 @@ To explain the parameters,
 - `-o 3.82.198.55` is the Opcenter IP. This is where submitted jobs will be sent to and can be viewed from.
 - `-g g-sidlpgb7oi9p48kxycpmn` and `-sg sg-02867677e76635b25` are gateway ID and security group, respectively. You can ask your admin for these IDs. These help in the VM's networking.
 - `-efs 10.1.10.210` specifies the IP of the EFS used in order to access installed packages.
-- `--batch` specifies batch mode.
-- `--job-script ./example/commands_to_submit.txt` provides the actual commands we want to submit to the VM.
+- `--job-script ./example/commands_to_submit.txt` provides the actual commands we want to submit to the VM. Providing this specifies batch mode
+- `--oem-packages` and `--mount-packages` are two modes that specify how the user can use certain packages. The former allows the user to use shared packages, and the latter allow the user to use user-installed packages. Specifying both will aloo both these features, but either can be used.
 - `-c 2` and `-m 16` specifies that the VM should have 2 CPU threads and 16GB of memory.
 - `--job-size 100` will split commands per line within `commands_to_submit.txt` into batches, each batch has at most 100 commands.
 - `--mount` includes three folders: the AWS folder `s3://statfungen/ftp_fgc_xql` is mounted to the VM as `~/data`; the AWS folder `s3://statfungen/ftp_fgc_xqtl/sos_cache/aw3600` is mounted to the VM as `~/.sos`; the AWS folder `statfungen/ftp_fgc_xqtl/analysis_result/finemapping_twas` is mounted to the VM as `~/output`. Notice how they are comma-separated.
@@ -58,15 +59,13 @@ To test this for yourself without submitting the job, please add `--dryrun` to t
  --oem-packages \
  --mount-packages \
  -jn TEST_ROCKEFELLER_oem_mount_packages \
- --interactive \
  -ide juypter
 ```
 
 Some of these parameters are shared with the batch job above. They will be skipped in the following explanation:
-- `--oem-packages` and `--mount-packages` are two modes that specify how the user can use certain packages. The former allows the user to use shared packages, and the latter allow the user to use user-installed packages. Specifying both will aloo both these features, but either can be used.
+- `--oem-packages` and `--mount-packages` are two modes that specify how the user can use certain packages. The former allows the user to use shared packages, and the latter allow the user to use user-installed packages. Specifying both will allow both these features, but either can be used.
 - `-jn` is the job name of the interactive job. By default, the name of the interactive job would be `<user>_<ide>_<port>`.
-- `--interactive` specifies interactive mode.
-- `-ide jupyter` specifies the ide used for the interactive job. By default, it will use the shell session `tmate`, however, `jupyter`, `vscode`, and `rstudio` can be used.
+- `-ide jupyter` specifies the ide used for the interactive job and providing this specifies an interactive job. By default, it will use the shell session `tmate`, however, `jupyter`, `vscode`, and `rstudio` can be used.
 
 
 
