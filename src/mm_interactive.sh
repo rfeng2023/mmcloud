@@ -14,8 +14,8 @@ efs_ip=""
 batch_mode=""
 interactive_mode=""
 shared_admin="" # For updating shared packages in interactive jobs
-mount_packages="" # For accessing one's own packages in interactive jobs
-oem_packages="" # For accessing shared packages in interactive jobs
+mount_packages="" # For accessing one's own packages in interactive and batch jobs
+oem_packages="" # For accessing shared packages in interactive and batch jobs. Default.
 
 # Global optional values (given by CLI) - some default values given
 declare -a dataVolumeOption=()
@@ -24,7 +24,7 @@ declare -a ebs_mount_size=()
 declare -a mount_local=()
 declare -a mount_remote=()
 declare -a mountOpt=()
-core=4
+core=2
 mem=16
 dryrun=false
 entrypoint=""
@@ -39,10 +39,6 @@ vm_policy=""
 
 # Batch-specific optional values
 job_script=""
-c_min=""
-c_max=""
-m_min=""
-m_max=""
 job_size=""
 cwd="~"
 parallel_commands=""
@@ -57,7 +53,7 @@ declare -a upload_local=()
 declare -a upload_remote=()
 
 # Interactive-specific optional values
-ide="tmate"
+ide=""
 idle_time=7200
 publish="8888:8888"
 publish_set=false
@@ -75,10 +71,7 @@ usage() {
     echo ""
 
     echo "Required Batch Options:"
-    echo "  --batch                               Submit a batch job"
     echo "  --job-script <file>                   Main job script to be run on MMC."                          
-    echo "  -c <min>:<optional max>               Specify the exact number of CPUs to use, or, with ':', the min and max of CPUs to use."
-    echo "  -m <min>:<optional max>               Specify the exact amount of memory to use, or, with ':', the min and max of memory in GB."
     echo "  --job-size <value>                    Set the number of commands per job for creating virtual machines."
     echo ""
 
@@ -94,16 +87,13 @@ usage() {
     echo ""
 
     echo "Required Interactive Options:"
-    echo "  --interactive                         Submit an interactive job"
+    echo "  -ide, --interactive-develop-env <env> Set the IDE"
     echo "  --shared-admin                        Run in admin mode to make changes to shared packages in interactive mode"
-    echo "  --mount-packages                      Grant the ability to use user packages in interactive mode"
-    echo "  --oem-packages                        Grant the ability to use shared packages in interactive mode"
     echo ""
 
     echo "Interactive-specific Options:"
     echo "  --idle <seconds>                      Amount of idle time before suspension. Only works for jupyter instances (default: 7200 seconds)"
     echo "  --suspend-off                         For Jupyter jobs, turn off the auto-suspension feature"
-    echo "  -ide, --interactive-develop-env <env> Set the IDE"
     echo "  -pub, --publish <ports>               Set the port publishing in the form of port:port"
     echo "  --entrypoint <dir>                    Set entrypoint of interactive job - please give Github link"
     echo ""
@@ -112,8 +102,10 @@ usage() {
     echo "  -u, --user <username>                 Set the username" # Login once so do not have to login before every job submission
     echo "  -p, --password <password>             Set the password"
     echo "  -i, --image <image>                   Set the Docker image"
-    echo "  -c, --core <cores>                    Set the number of cores for initial instance (no min:max)"
-    echo "  -m, --mem <memory>                    Set the memory size for initial instance (no min:max)"
+    echo "  -c <cores>                            Specify the exact number of CPUs to use."
+    echo "  -m <mem>                              Specify the exact amount of memory to use (in GB)."
+    echo "  --mount-packages                      Grant the ability to use user packages in interactive mode"
+    echo "  --oem-packages                        Grant the ability to use shared packages in interactive mode"
     echo "  -vp, --vmPolicy <policy>              Set the VM policy"
     echo "  -ivs, --imageVolSize <size>           Set the image volume size"
     echo "  -rvs, --rootVolSize <size>            Set the root volume size"
@@ -135,39 +127,14 @@ while (( "$#" )); do
         -i|--image) image="$2"; shift ;;
         -sg|--securityGroup) securityGroup="$2"; shift ;;
         -g|--gateway) gateway="$2"; shift ;;
-        -c|--core)
-            # If a ":" is given, then it is specifying a min:max for batch jobs
-            if [[ "$2" =~ ":" ]]; then
-                c_min=$(echo "$2" | cut -d':' -f1)
-                c_max=$(echo "$2" | cut -d':' -f2)
-            else
-                c_min="$2"
-                c_max=""
-                core="$2" # For interactive job
-            fi
-            parallel_commands=$c_min  # Default parallel commands to min CPU if not specified
-            shift 
-            ;;
-        -m|--mem)
-            if [[ "$2" =~ ":" ]]; then
-                m_min=$(echo "$2" | cut -d':' -f1)
-                m_max=$(echo "$2" | cut -d':' -f2)
-            if [ -n "$m_max" ]; then
-                m_max=":${m_max}"
-            fi
-            else
-                m_min="$2"
-                m_max=""
-                mem="$2" # For interactive job
-            fi
-            shift 
-            ;;
+        -c|--core) core="$2"; parallel_commands="$2"; shift ;;
+        -m|--mem) mem="$2"; shift ;;
         -pub|--publish) publish="$2"; publish="$2"; publish_set=true; shift ;;
         -efs) efs_ip="$2"; shift ;;
         -vp|--vmPolicy) vm_policy="$2"; shift ;;
         -ivs|--imageVolSize) image_vol_size="$2"; shift ;;
         -rvs|--rootVolSize) root_vol_size="$2"; shift ;;
-        -ide|--interactive-develop-env) ide="$2"; shift ;;
+        -ide|--interactive-develop-env) ide="$2"; interactive_mode="true"; shift ;;
         -jn|--job-name) job_name="$2"; shift ;;
         --float-executable) float_executable="$2"; shift ;;
         --entrypoint) entrypoint="$2"; shift ;;
@@ -177,12 +144,10 @@ while (( "$#" )); do
         --mount-packages) mount_packages=true ;;
         --oem-packages) oem_packages=true ;;
         --dryrun) dryrun=true ;;
-        --parallel-commands) parallel_commands="$2"; shift ;;
+        --parallel-commands) parallel_commands="$2"; parallel_commands_given=true; shift ;;
         --min-cores-per-command) min_cores_per_command="$2"; shift ;;
         --min-mem-per-command) min_mem_per_command="$2"; shift ;;
-        --batch) batch_mode="true" ;;
-        --interactive) interactive_mode="true" ;;
-        --job-script) job_script="$2"; shift ;;
+        --job-script) job_script="$2"; batch_mode="true"; shift ;;
         --job-size) job_size="$2"; shift ;;
         --cwd) cwd="$2"; shift ;;
         --no-fail-fast) no_fail="|| true"; no_fail_parallel="--halt never || true" ;;
@@ -262,6 +227,20 @@ check_required_params() {
         is_missing=true
     fi
 
+    # Both `-ide` or `--job-script` cannot be specified
+    if [ -n "$ide" ] && [ -n "$job_script" ]; then
+        echo ""
+        echo "Error: Please specify either an IDE for interactive jobs, or a job script for a batch job."
+        exit 1
+    # However, if neither are specified, we will be in the default tmate interactive job in oem-packages mode
+    elif [ -z "$ide" ] && [ -z "$job_script" ]; then
+        echo ""
+        echo "Warning: Neither an IDE nor a job script was specified. Starting interactive tmate job in oem-packages mode."
+        interactive_mode="true"
+        ide="tmate"
+        oem_packages=true
+    fi
+
     # Batch and Interactive jobs use the same format to mount buckets
     if [[ ${#mount_local[@]} -ne ${#mountOpt[@]} ]]; then
         missing_params+="--mountOpt (required to match with --mount), "
@@ -315,24 +294,12 @@ check_conflicting_parameters() {
             conflicting_params+="--shared-admin "
             is_conflicting=true
         fi
-        if [[ ! -z "$mount_packages" ]]; then
-            conflicting_params+="--mount-packages "
-            is_conflicting=true
-        fi
-        if [[ ! -z "$oem_packages" ]]; then
-            conflicting_params+="--oem-packages "
-            is_conflicting=true
-        fi
         if [[ "$idle_time" != 7200 ]]; then
             conflicting_params+="--idle "
             is_conflicting=true
         fi
         if [[ "$suspend_off" != "" ]]; then
             conflicting_params+="--suspend-off "
-            is_conflicting=true
-        fi
-        if [[ "$ide" != "tmate" ]]; then
-            conflicting_params+="--ide "
             is_conflicting=true
         fi
         if [[ "$publish_set" != false ]]; then
@@ -358,10 +325,6 @@ check_conflicting_parameters() {
             conflicting_params+="--job-size "
             is_conflicting=true
         fi
-        if [[ ! -z "$job_script" ]]; then
-            conflicting_params+="--job-script "
-            is_conflicting=true
-        fi
         if [[ "$cwd" != "~" ]]; then
             conflicting_params+="--cwd "
             is_conflicting=true
@@ -382,7 +345,7 @@ check_conflicting_parameters() {
             conflicting_params+="--no-fail-fast "
             is_conflicting=true
         fi
-        if [[ ! -z "$parallel_commands" ]]; then
+        if [[ ! -z "$parallel_commands_given" ]]; then
             conflicting_params+="--parallel-commands "
             is_conflicting=true
         fi
@@ -415,14 +378,6 @@ check_required_batch_params() {
         missing_params+="--job-script, "
         is_missing=true
     fi
-    if [ -z "$c_min" ]; then
-        missing_params+="-c, "
-        is_missing=true
-    fi
-    if [ -z "$m_min" ]; then
-        missing_params+="-m, "
-        is_missing=true
-    fi
     if [ -z "$job_size" ]; then
         missing_params+="--job-size, "
         is_missing=true
@@ -431,6 +386,14 @@ check_required_batch_params() {
     if [[ ${#download_include[@]} -gt ${#download_local[@]} ]]; then
         missing_params+="--download_include (canot surpass number of --download values), "
         is_missing=true
+    fi
+
+    # Batch mode can also specify either mount-packages, oem-packages, or both
+    # However, if neither are given, default to oem-packages
+    if [[ -z "$mount_packages" && -z "$oem_packages" ]]; then
+        echo ""
+        echo "Warning: No mode specified for batch job. Defaulting to oem-packages mode."
+        oem_packages=true
     fi
 
     # Remove trailing comma and space
@@ -677,6 +640,25 @@ submit_each_line_with_float() {
         fi
     fi
 
+    # Ability to use --mount-packages and --oem-packages as batch user
+    local directory_setup="vm_username=\$(whoami)\n"
+    if [[ $oem_packages == true && $mount_packages == true ]]; then
+        # Can access user and shared packages
+        directory_setup+="ln -sf /mnt/efs/$user/.pixi /home/\${vm_username}/.pixi\n"
+        directory_setup+="ln -sf /mnt/efs/$user/micromamba /home/\${vm_username}/micromamba\n"
+        directory_setup+="export PATH=\"\${HOME}/.pixi/bin:/mnt/efs/shared/.pixi/bin:\${PATH}\"\n"
+    elif [[ $mount_packages == true ]]; then
+        # Only user packages
+        directory_setup+="ln -sf /mnt/efs/$user/.pixi /home/\${vm_username}/.pixi\n"
+        directory_setup+="ln -sf /mnt/efs/$user/micromamba /home/\${vm_username}/micromamba\n"
+        directory_setup+="export PATH=\"\${HOME}/.pixi/bin:\${PATH}\"\n"
+    elif [[ $oem_packages == true ]]; then
+        # Only shared packages
+        directory_setup+="export PATH=\"\${HOME}/.pixi/bin:/mnt/efs/shared/.pixi/bin:\${PATH}\"\n"
+        directory_setup+="curl -O https://raw.githubusercontent.com/gaow/misc/refs/heads/master/bash/pixi/init.sh;"
+        directory_setup+="chmod +x init.sh;./init.sh"
+    fi
+
     # Loop to create job submission commands
     for (( j = 0; j < $num_jobs; j++ )); do
         full_cmd=""
@@ -703,10 +685,7 @@ submit_each_line_with_float() {
 set -o errexit -o pipefail
 
 # Symlink /mnt/efs/shared folders to \${HOME} to make software available
-username=\$(whoami)
-ln -sf /mnt/efs/shared/.pixi /home/\${username}/.pixi
-ln -sf /mnt/efs/shared/micromamba /home/\${username}/micromamba
-export PATH="\${HOME}/.pixi/bin:/mnt/efs/shared/.pixi:\${PATH}"
+${directory_setup}
 
 # Function definition for calculate_max_parallel_jobs
 ${calculate_max_parallel_jobs_def}
@@ -765,8 +744,8 @@ EOF
         --securityGroup $securityGroup \n\
         -i '$image' \n\
         -j $job_filename \n\
-        -c $c_min$c_max \n\
-        -m $m_min$m_max \n\
+        -c $core \n\
+        -m $mem \n\
         --hostInit $script_dir/host_init_interactive.sh \n\
         --dirMap /mnt/efs:/mnt/efs \n\
         --withRoot \n\
@@ -794,6 +773,15 @@ EOF
             full_cmd+=" --rootVolSize $root_vol_size"
         fi
 
+        # Set MODE env variable
+        if [[ -n "$mount_packages" && -n "$oem_packages" ]]; then
+            full_cmd+=" --env MODE=oem_mount_packages"
+        elif [[ -n "$mount_packages" ]]; then
+            full_cmd+=" --env MODE=mount_packages"
+        elif [[ -n "$oem_packages" ]]; then
+            full_cmd+=" --env MODE=oem_packages"
+        fi
+
         full_cmd=${full_cmd%\ }
 
         # Execute or echo the full command
@@ -812,17 +800,17 @@ EOF
 # # # Helper functions for interactive jobs # # #
 # If in interactive mode, check params
 check_required_interactive_params(){
-    # Check for missing interactive  mode params
+    # Check for interactive mode params
+    # If none of the modes are given, default to oem-packages mode
     if [[ -z "$shared_admin" && -z "$mount_packages" && -z "$oem_packages" ]]; then
         echo ""
-        echo "Error: At least one of --shared-admin, --mount-packages, or --oem-packages must be provided."
-        exit 1
+        echo "Warning: No mode specified for interactive job. Defaulting to oem-packages mode."
+        oem_packages=true
     elif [[ -n "$shared_admin" && (-n "$mount_packages" || -n "$oem_packages") ]]; then
         echo ""
         echo "Error: --shared-admin cannot be used the other modes."
         exit 1
     fi
-
 }
 
 # Set tmate warning and check valid IDEs
@@ -1203,13 +1191,8 @@ submit_interactive_job() {
 check_required_params
 check_conflicting_parameters
 
-# Check if in batch or interactive mode
-if [[ ("$batch_mode" == "true" && "$interactive_mode" == "true") || 
-      ("$batch_mode" != "true" && "$interactive_mode" != "true") ]]; then
-    echo "Error: Please specify either --batch or --interactive."
-    exit 1
 # Start batch mode if batch_mode is true
-elif [[ "$batch_mode" == "true" ]]; then
+if [[ "$batch_mode" == "true" ]]; then
     echo "Starting batch mode..."
 
     # Check parameters

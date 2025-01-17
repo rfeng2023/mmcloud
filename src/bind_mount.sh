@@ -57,11 +57,6 @@ set_paths() {
     tee ${HOME}/.set_paths << EOF
 export PATH="\${HOME}/.pixi/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 EOF
-  elif [[ ${mode} == "oem_admin" ]]; then
-    # oem_admin will use /mnt/efs/oem/.pixi/bin to update batch packages
-    tee ${HOME}/.set_paths << EOF
-export PATH="\${HOME}/.pixi/bin:/mnt/efs/oem/.pixi/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-EOF
   else
     # For all other modes, to avoid potential conflicts between user installed packages in their home folder (whether it's saved to EFS or not)
     # We set the HOME path before the shared path
