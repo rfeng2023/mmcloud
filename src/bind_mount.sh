@@ -108,7 +108,7 @@ chmod +x init.sh
 
 # Run entrypoint if given
 if [[ ! -z "$ENTRYPOINT" ]]; then
-    ${ENTRYPOINT}
+    curl -fsSL ${ENTRYPOINT} | bash
 else
 # Else run original VMUI check
   is_available() {
