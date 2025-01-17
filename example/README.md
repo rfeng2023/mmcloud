@@ -18,7 +18,7 @@ username=aw3600
  -sg sg-02867677e76635b25 \
  -efs 10.1.10.210 \
  --job-script ./example/commands_to_submit.txt \
---oem-packages \
+ --oem-packages \
  --mount-packages \
  -c 2 -m 16 \
  --job-size 100 \
