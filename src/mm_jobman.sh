@@ -234,11 +234,22 @@ check_required_params() {
         exit 1
     # However, if neither are specified, we will be in the default tmate interactive job in oem-packages mode
     elif [ -z "$ide" ] && [ -z "$job_script" ]; then
-        echo ""
-        echo "Warning: Neither an IDE nor a job script was specified. Starting interactive tmate job in oem-packages mode."
-        interactive_mode="true"
-        ide="tmate"
-        oem_packages=true
+        # It's possible for users to do `--shared-admin` when ide and job script are not defined.
+        # Make sure share-admin is not defined
+        if [ -z "$shared_admin" ]; then
+            echo ""
+            echo "Warning: Neither an IDE nor a job script was specified. Starting interactive tmate job in oem-packages mode."
+            interactive_mode="true"
+            ide="tmate"
+            oem_packages=true
+        # if shared-admin is defined, set the right parameters
+        else
+            echo ""
+            echo "Warning: Shared-admin mode was specified without ide or job script. Starting interactive tmate job in shared-admin mode"
+            interactive_mode="true"
+            ide="tmate"
+            shared_admin="true"
+        fi
     fi
 
     # Batch and Interactive jobs use the same format to mount buckets
@@ -808,7 +819,7 @@ check_required_interactive_params(){
         oem_packages=true
     elif [[ -n "$shared_admin" && (-n "$mount_packages" || -n "$oem_packages") ]]; then
         echo ""
-        echo "Error: --shared-admin cannot be used the other modes."
+        echo "Error: --shared-admin cannot be used with the other package modes."
         exit 1
     fi
 }
