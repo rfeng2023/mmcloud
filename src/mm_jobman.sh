@@ -290,6 +290,13 @@ login() {
         echo ""
     fi
     "$float_executable" login -a "$opcenter" -u "$user" -p "$password"
+
+    # If error returned by login, exit the script
+    if [[ "$?" != 0 ]]; then
+        echo ""
+        echo "Error: Login failed. Please check username and password"
+        exit 1
+    fi
 }
 
 # Check if user is using the wrong parameters for the wrong mode
