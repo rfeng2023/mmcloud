@@ -746,7 +746,7 @@ EOF
         -j $job_filename \n\
         -c $core \n\
         -m $mem \n\
-        --hostInit $script_dir/host_init_interactive.sh \n\
+        --hostInit $script_dir/host_init.sh \n\
         --dirMap /mnt/efs:/mnt/efs \n\
         --withRoot \n\
         --vmPolicy $vm_policy_command \n\
@@ -1209,7 +1209,7 @@ elif [[ "$interactive_mode" == "true" ]]; then
     echo "Starting interactive mode..."
 
     # Initialize variables
-    host_script="host_init_interactive.sh"
+    host_script="host_init.sh"
     float_submit_interactive_args=(
         "$float_executable" "submit"
     )
