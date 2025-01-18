@@ -88,7 +88,6 @@ usage() {
 
     echo "Required Interactive Options:"
     echo "  -ide, --interactive-develop-env <env> Set the IDE"
-    echo "  --shared-admin                        Run in admin mode to make changes to shared packages in interactive mode"
     echo ""
 
     echo "Interactive-specific Options:"
@@ -96,14 +95,15 @@ usage() {
     echo "  --suspend-off                         For Jupyter jobs, turn off the auto-suspension feature"
     echo "  -pub, --publish <ports>               Set the port publishing in the form of port:port"
     echo "  --entrypoint <dir>                    Set entrypoint of interactive job - please give Github link"
+    echo "  --shared-admin                        Run in admin mode to make changes to shared packages in interactive mode"
     echo ""
 
     echo "Global Options:"
-    echo "  -u, --user <username>                 Set the username" # Login once so do not have to login before every job submission
+    echo "  -u, --user <username>                 Set the username"
     echo "  -p, --password <password>             Set the password"
     echo "  -i, --image <image>                   Set the Docker image"
-    echo "  -c <cores>                            Specify the exact number of CPUs to use."
-    echo "  -m <mem>                              Specify the exact amount of memory to use (in GB)."
+    echo "  -c <min>:<optional max>               Specify the exact number or a range of CPUs to use."
+    echo "  -m <min>:<optional max>               Specify the exact amount or a range of memory to use (in GB)."
     echo "  --mount-packages                      Grant the ability to use user packages in interactive mode"
     echo "  --oem-packages                        Grant the ability to use shared packages in interactive mode"
     echo "  -vp, --vmPolicy <policy>              Set the VM policy"
