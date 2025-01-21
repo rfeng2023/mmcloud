@@ -496,27 +496,18 @@ create_upload_commands() {
 }
 
 mount_batch_buckets() {
-  local dataVolume_cmd=""
-
-  # If just one mount option, use the same one for all bucket mounting
-  if [ ${#mountOpt[@]} -eq 1 ]; then
-    for i in "${!mount_local[@]}"; do
-        dataVolume_cmd+="--dataVolume '[$mountOpt,endpoint=s3.us-east-1.amazonaws.com]s3://${mount_remote[$i]}:${mount_local[$i]}' "
-    done
-
-  # If more than one mount option, we expect there to be the same number of mounted buckets
-  else
+    local dataVolume_cmd=""
+    # If more than one mount option, we expect there to be the same number of mounted buckets
     if [ ${#mountOpt[@]} -eq  ${#mount_local[@]} ]; then
-      for i in "${!mountOpt[@]}"; do
+        for i in "${!mountOpt[@]}"; do
             dataVolume_cmd+="--dataVolume '[${mountOpt[$i]},endpoint=s3.us-east-1.amazonaws.com]s3://${mount_remote[$i]}:${mount_local[$i]}' "
-      done
+        done
     else
-      # Number of mountOptions > 1 and dne number of buckets
-      echo ""
-      echo -e "\n[ERROR] If there are multiple mount options, please provide the same number of mount options and same number of buckets\n"
-      exit 1
+        # Number of mountOptions > 1 and dne number of buckets
+        echo ""
+        echo -e "\n[ERROR] If there are multiple mount options, please provide the same number of mount options and same number of buckets\n"
+        exit 1
     fi
-  fi
 
   echo -e $dataVolume_cmd
 }
@@ -886,17 +877,11 @@ determine_ports() {
 # Data volume handling
 determine_interactive_mounts() {
     # Mounting buckets
-    # If just one mount option, use the same one for all bucket mounting
-    if [ ${#mountOpt[@]} -eq 1 ]; then
-        for i in "${!mount_local[@]}"; do
-            float_submit_interactive_args+=("--dataVolume" "[$mountOpt,endpoint=s3.us-east-1.amazonaws.com]s3://${mount_remote[$i]}:${mount_local[$i]}")
-        done
-
     # If more than one mount option, we expect there to be the same number of mounted buckets
     # As we did a check in check_required_params
-    elif [ ${#mountOpt[@]} -eq  ${#mount_local[@]} ]; then
+    if [ ${#mountOpt[@]} -eq  ${#mount_local[@]} ]; then
         for i in "${!mountOpt[@]}"; do
-                float_submit_interactive_args+=("--dataVolume" "[$mountOpt,endpoint=s3.us-east-1.amazonaws.com]s3://${mount_remote[$i]}:${mount_local[$i]}")
+            float_submit_interactive_args+=("--dataVolume" "[${mountOpt[$i]},endpoint=s3.us-east-1.amazonaws.com]s3://${mount_remote[$i]}:${mount_local[$i]}")
         done
     fi
 
