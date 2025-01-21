@@ -24,6 +24,7 @@ declare -a ebs_mount_size=()
 declare -a mount_local=()
 declare -a mount_remote=()
 declare -a mountOpt=()
+declare -a env_variables=()
 core=2
 mem=16
 dryrun=false
@@ -112,6 +113,7 @@ usage() {
     echo "  --ebs-mount <folder>=<size>           Mount an EBS volume to a local directory. Format: <local path>=<size>. Size in GB (comma-separated)."
     echo "  --mount <s3_path:vm_path>             Add S3:VM mounts, separated by commas"
     echo "  --mountOpt <value>                    Specify mount options for the bucket (required if --mount is used) (comma-separated)."
+    echo "  --env <variable>=<value>              Specify additional environmental variables (comma-separated)."
     echo "  -jn, --job-name <name>                Set the job name (batch jobs will have a number suffix)"
     echo "  --float-executable <path>             Set the path to the float executable (default: float)"
     echo "  --dryrun                              Execute a dry run, printing commands without running them."
@@ -168,6 +170,13 @@ while (( "$#" )); do
             IFS=',' read -ra INCLUDE <<< "$2"
             for include in "${INCLUDE[@]}"; do
                 download_include+=("${include[0]}")
+            done
+            shift
+            ;;
+        --env)
+            IFS=',' read -ra envs <<< "$2"
+            for variables in "${envs[@]}"; do
+                env_variables+=("${variables[0]}")
             done
             shift
             ;;
@@ -791,6 +800,11 @@ EOF
             full_cmd+=" --env MODE=oem_packages"
         fi
 
+        # Additional env variables
+        for variables in "${env_variables[@]}"; do
+            full_cmd+=" --env $variables"
+        done
+
         full_cmd=${full_cmd%\ }
 
         # Execute or echo the full command
@@ -1013,6 +1027,13 @@ float_parameter_checks() {
             "--env" "SUSPEND_FEATURE=false"
         )
     fi
+
+    # Additional env variables
+    for variables in "${env_variables[@]}"; do
+        float_submit_interactive_args+=(
+            "--env" "$variables"
+        )
+    done
 }
 
 # Validate mode combinations
