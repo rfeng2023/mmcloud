@@ -101,6 +101,11 @@ else
   exit 1
 fi
 
+# Update channel config file if it does not exist already
+if [ ! -d "${HOME}/.pixi" ] && [ ! -f "${HOME}/.pixi/config.toml" ]; then
+  mkdir -p ${HOME}/.pixi && echo 'default_channels = ["dnachun", "conda-forge", "bioconda"]' > ${HOME}/.pixi/config.toml
+fi
+
 # init.sh run after it is updated
 curl -O https://raw.githubusercontent.com/gaow/misc/refs/heads/master/bash/pixi/init.sh
 chmod +x init.sh
