@@ -673,8 +673,16 @@ submit_each_line_with_float() {
     elif [[ $oem_packages == true ]]; then
         # Only shared packages
         directory_setup+="export PATH=\"\${HOME}/.pixi/bin:/mnt/efs/shared/.pixi/bin:\${PATH}\"\n"
-        directory_setup+="curl -O https://raw.githubusercontent.com/gaow/misc/refs/heads/master/bash/pixi/init.sh;"
-        directory_setup+="chmod +x init.sh;./init.sh"
+	directory_setup+="mkdir -p \${HOME}/.local/lib/python3.12/site-packages\n"
+	directory_setup+="tee \${HOME}/.local/lib/python3.12/site-packages/sitecustomize.py << 'EOF'\n"
+	directory_setup+="import sys\n"
+	directory_setup+="sys.path[0:0] = [\n"
+	directory_setup+="   \"/mnt/efs/shared/.pixi/envs/python/lib/python3.12/site-packages\"\n"
+	directory_setup+="]\n"
+	directory_setup+="EOF\n"
+	directory_setup+="echo \".libPaths('/mnt/efs/shared/.pixi/envs/r-base/lib/R/library')\" >> \${HOME}/.Rprofile\n"
+	directory_setup+="mkdir -p \${HOME}/.pixi/envs/python/lib/R/etc\n"
+	directory_setup+="echo \".libPaths('\${HOME}/.pixi/envs/r-base/lib/R/library')\" >> \${HOME}/.pixi/envs/python/lib/R/etc/Rprofile.site\n"
     fi
 
     # Loop to create job submission commands
@@ -764,7 +772,7 @@ EOF
         -j $job_filename \n\
         -c $core \n\
         -m $mem \n\
-        --hostInit $script_dir/host_init.sh \n\
+        --hostInit $host_script \n\
         --dirMap /mnt/efs:/mnt/efs \n\
         --withRoot \n\
         --vmPolicy $vm_policy_command \n\
@@ -979,7 +987,7 @@ float_parameter_checks() {
         "--withRoot"
         "--allowList" "[r5*,r6*,r7*,m*]"
         "-j" "$script_dir/bind_mount.sh"
-        "--hostInit" "$script_dir/${host_script}"
+        "--hostInit" "${host_script}"
         "--dirMap" "/mnt/efs:/mnt/efs"
         "-n" "$job_name"
         "--env" "GRANT_SUDO=yes"
@@ -1214,7 +1222,8 @@ submit_interactive_job() {
 # Check required parameters (regardless of batch or interactive)
 check_required_params
 check_conflicting_parameters
-
+script_dir=$(find_script_dir)
+host_script="${script_dir}/host_init.sh"
 # Start batch mode if batch_mode is true
 if [[ "$batch_mode" == "true" ]]; then
     echo "Starting batch mode..."
@@ -1222,7 +1231,6 @@ if [[ "$batch_mode" == "true" ]]; then
     # Check parameters
     check_required_batch_params
 
-    script_dir=$(find_script_dir)
     login
 
     # Submit job
@@ -1233,7 +1241,6 @@ elif [[ "$interactive_mode" == "true" ]]; then
     echo "Starting interactive mode..."
 
     # Initialize variables
-    host_script="host_init.sh"
     float_submit_interactive_args=(
         "$float_executable" "submit"
     )
@@ -1242,7 +1249,6 @@ elif [[ "$interactive_mode" == "true" ]]; then
     check_required_interactive_params
 
     # Additional helper functions
-    script_dir=$(find_script_dir)
     give_tmate_warning
     login
     determine_ports
