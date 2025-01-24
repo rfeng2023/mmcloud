@@ -25,6 +25,7 @@ declare -a mount_local=()
 declare -a mount_remote=()
 declare -a mountOpt=()
 declare -a env_variables=()
+declare -a extra_parameters=()
 core=2
 mem=16
 dryrun=false
@@ -206,6 +207,21 @@ while (( "$#" )); do
                 mountOpt+=("$mount")
             done
             shift
+            ;;
+        -*|--*=)  # Unsupported flags
+            extra_parameters+=("$1")  # Add the unsupported flag to extra_parameters
+            shift  # Move past the flag
+            # We expect the user to understand float cli commands if using this option
+            # Therefore, all unsupported flags will be added to the end of the float command as they are
+            # Add all subsequent arguments until the next flag to extra_parameters
+            while [ $# -gt 0 ]; do
+                extra_parameters+=("$1")
+                if ! [[ "$2" =~ ^- ]]; then
+                    shift
+                else
+                    break
+                fi
+            done
             ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown parameter passed: $1"; usage; exit 1 ;;
@@ -673,16 +689,16 @@ submit_each_line_with_float() {
     elif [[ $oem_packages == true ]]; then
         # Only shared packages
         directory_setup+="export PATH=\"\${HOME}/.pixi/bin:/mnt/efs/shared/.pixi/bin:\${PATH}\"\n"
-	directory_setup+="mkdir -p \${HOME}/.local/lib/python3.12/site-packages\n"
-	directory_setup+="tee \${HOME}/.local/lib/python3.12/site-packages/sitecustomize.py << 'EOF'\n"
-	directory_setup+="import sys\n"
-	directory_setup+="sys.path[0:0] = [\n"
-	directory_setup+="   \"/mnt/efs/shared/.pixi/envs/python/lib/python3.12/site-packages\"\n"
-	directory_setup+="]\n"
-	directory_setup+="EOF\n"
-	directory_setup+="echo \".libPaths('/mnt/efs/shared/.pixi/envs/r-base/lib/R/library')\" >> \${HOME}/.Rprofile\n"
-	directory_setup+="mkdir -p \${HOME}/.pixi/envs/python/lib/R/etc\n"
-	directory_setup+="echo \".libPaths('\${HOME}/.pixi/envs/r-base/lib/R/library')\" >> \${HOME}/.pixi/envs/python/lib/R/etc/Rprofile.site\n"
+        directory_setup+="mkdir -p \${HOME}/.local/lib/python3.12/site-packages\n"
+        directory_setup+="tee \${HOME}/.local/lib/python3.12/site-packages/sitecustomize.py << 'EOF'\n"
+        directory_setup+="import sys\n"
+        directory_setup+="sys.path[0:0] = [\n"
+        directory_setup+="   \"/mnt/efs/shared/.pixi/envs/python/lib/python3.12/site-packages\"\n"
+        directory_setup+="]\n"
+        directory_setup+="EOF\n"
+        directory_setup+="echo \".libPaths('/mnt/efs/shared/.pixi/envs/r-base/lib/R/library')\" >> \${HOME}/.Rprofile\n"
+        directory_setup+="mkdir -p \${HOME}/.pixi/envs/python/lib/R/etc\n"
+        directory_setup+="echo \".libPaths('\${HOME}/.pixi/envs/r-base/lib/R/library')\" >> \${HOME}/.pixi/envs/python/lib/R/etc/Rprofile.site\n"
     fi
 
     # Loop to create job submission commands
@@ -811,6 +827,11 @@ EOF
         # Additional env variables
         for variables in "${env_variables[@]}"; do
             full_cmd+=" --env $variables"
+        done
+
+        # Added extra parameters if given
+        for param in "${extra_parameters[@]}"; do
+          full_cmd+=" $param"
         done
 
         full_cmd=${full_cmd%\ }
@@ -1040,6 +1061,13 @@ float_parameter_checks() {
     for variables in "${env_variables[@]}"; do
         float_submit_interactive_args+=(
             "--env" "$variables"
+        )
+    done
+
+    # Added extra parameters if given
+    for param in "${extra_parameters[@]}"; do
+        float_submit_interactive_args+=(
+            "$param"
         )
     done
 }
