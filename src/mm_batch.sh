@@ -5,6 +5,8 @@ opcenter=3.82.198.55
 gateway=g-sidlpgb7oi9p48kxycpmn
 efs_ip=10.1.10.210
 security_group=sg-02867677e76635b25
+initial_mount="statfungen/ftp_fgc_xqtl/:/data"
+initial_mountOpt="mode=r"
 ################################################################
 
 # Find parent directory of mm_jobman.sh
@@ -20,4 +22,4 @@ find_script_dir() {
 }
 
 script_dir=$(find_script_dir)
-$script_dir/mm_jobman.sh -o $opcenter -g $gateway -efs $efs_ip -sg $security_group $@
+$script_dir/mm_jobman.sh -o $opcenter -g $gateway -efs $efs_ip -sg $security_group --mount $initial_mount --mountOpt $initial_mountOpt $@
