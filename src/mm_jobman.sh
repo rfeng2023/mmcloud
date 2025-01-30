@@ -427,7 +427,7 @@ check_required_batch_params() {
     fi
 
     if [[ ${#download_include[@]} -gt ${#download_local[@]} ]]; then
-        missing_params+="--download_include (canot surpass number of --download values), "
+        missing_params+="--download-include (cannot surpass number of --download values), "
         is_missing=true
     fi
 
