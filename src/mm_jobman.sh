@@ -24,7 +24,6 @@ declare -a ebs_mount_size=()
 declare -a mount_local=()
 declare -a mount_remote=()
 declare -a mountOpt=()
-declare -a env_variables=()
 declare -a extra_parameters=()
 core=2
 mem=16
@@ -79,7 +78,7 @@ usage() {
 
     echo "Batch-specific Options:"
     echo "  --cwd <value>                         Define the working directory for the job (default: ~)."
-    echo "  --download <remote>:<local>           Download files/folders from S3. Format: <S3 path>:<local path> (comma-separated)."
+    echo "  --download <remote>:<local>           Download files/folders from S3. Format: <S3 path>:<local path> (space-separated)."
     echo "  --upload <local>:<remote>             Upload folders to S3. Format: <local path>:<S3 path>."
     echo "  --download-include '<value>'          Include certain files for download (space-separated), encapsulate in quotations."
     echo "  --no-fail-fast                        Continue executing subsequent commands even if one fails."
@@ -111,10 +110,10 @@ usage() {
     echo "  -vp, --vmPolicy <policy>              Set the VM policy"
     echo "  -ivs, --imageVolSize <size>           Set the image volume size"
     echo "  -rvs, --rootVolSize <size>            Set the root volume size"
-    echo "  --ebs-mount <folder>=<size>           Mount an EBS volume to a local directory. Format: <local path>=<size>. Size in GB (comma-separated)."
-    echo "  --mount <s3_path:vm_path>             Add S3:VM mounts, separated by commas"
-    echo "  --mountOpt <value>                    Specify mount options for the bucket (required if --mount is used) (comma-separated)."
-    echo "  --env <variable>=<value>              Specify additional environmental variables (comma-separated)."
+    echo "  --ebs-mount <folder>=<size>           Mount an EBS volume to a local directory. Format: <local path>=<size>. Size in GB (space-separated)."
+    echo "  --mount <s3_path:vm_path>             Add S3:VM mounts, separated by spaces"
+    echo "  --mountOpt <value>                    Specify mount options for the bucket (required if --mount is used) (space-separated)."
+    echo "  --env <variable>=<value>              Specify additional environmental variables (space-separated)."
     echo "  -jn, --job-name <name>                Set the job name (batch jobs will have a number suffix)"
     echo "  --float-executable <path>             Set the path to the float executable (default: float)"
     echo "  --dryrun                              Execute a dry run, printing commands without running them."
@@ -124,89 +123,78 @@ usage() {
 # Parse command line options
 while (( "$#" )); do
   case "$1" in
-        -o|--opcenter) opcenter="$2"; shift ;;
-        -u|--user) user="$2"; shift ;;
-        -p|--password) password="$2"; shift ;;
-        -i|--image) image="$2"; shift ;;
-        -sg|--securityGroup) securityGroup="$2"; shift ;;
-        -g|--gateway) gateway="$2"; shift ;;
-        -c|--core) core="$2"; parallel_commands="$2"; shift ;;
-        -m|--mem) mem="$2"; shift ;;
-        -pub|--publish) publish="$2"; publish="$2"; publish_set=true; shift ;;
-        -efs) efs_ip="$2"; shift ;;
-        -vp|--vmPolicy) vm_policy="$2"; shift ;;
-        -ivs|--imageVolSize) image_vol_size="$2"; shift ;;
-        -rvs|--rootVolSize) root_vol_size="$2"; shift ;;
-        -ide|--interactive-develop-env) ide="$2"; interactive_mode="true"; shift ;;
-        -jn|--job-name) job_name="$2"; shift ;;
-        --float-executable) float_executable="$2"; shift ;;
-        --entrypoint) entrypoint="$2"; shift ;;
-        --idle) idle_time="$2"; shift ;;
-        --suspend-off) suspend_off=true ;;
-        --shared-admin) shared_admin=true ;;
-        --mount-packages) mount_packages=true ;;
-        --oem-packages) oem_packages=true ;;
-        --dryrun) dryrun=true ;;
-        --parallel-commands) parallel_commands="$2"; parallel_commands_given=true; shift ;;
-        --min-cores-per-command) min_cores_per_command="$2"; shift ;;
-        --min-mem-per-command) min_mem_per_command="$2"; shift ;;
-        --job-script) job_script="$2"; batch_mode="true"; shift ;;
-        --job-size) job_size="$2"; shift ;;
-        --cwd) cwd="$2"; shift ;;
-        --no-fail-fast) no_fail="|| true"; no_fail_parallel="--halt never || true" ;;
+        -o|--opcenter) opcenter="$2"; shift 2;;
+        -u|--user) user="$2"; shift 2;;
+        -p|--password) password="$2"; shift 2;;
+        -i|--image) image="$2"; shift 2;;
+        -sg|--securityGroup) securityGroup="$2"; shift 2;;
+        -g|--gateway) gateway="$2"; shift 2;;
+        -c|--core) core="$2"; parallel_commands="$2"; shift 2;;
+        -m|--mem) mem="$2"; shift 2;;
+        -pub|--publish) publish="$2"; publish="$2"; publish_set=true; shift 2;;
+        -efs) efs_ip="$2"; shift 2;;
+        -vp|--vmPolicy) vm_policy="$2"; shift 2;;
+        -ivs|--imageVolSize) image_vol_size="$2"; shift 2;;
+        -rvs|--rootVolSize) root_vol_size="$2"; shift 2;;
+        -ide|--interactive-develop-env) ide="$2"; interactive_mode="true"; shift 2;;
+        -jn|--job-name) job_name="$2"; shift 2;;
+        --float-executable) float_executable="$2"; shift 2;;
+        --entrypoint) entrypoint="$2"; shift 2;;
+        --idle) idle_time="$2"; shift 2;;
+        --suspend-off) suspend_off=true; shift ;;
+        --shared-admin) shared_admin=true; shift ;;
+        --mount-packages) mount_packages=true; shift ;;
+        --oem-packages) oem_packages=true; shift ;;
+        --dryrun) dryrun=true; shift ;;
+        --parallel-commands) parallel_commands="$2"; parallel_commands_given=true; shift 2;;
+        --min-cores-per-command) min_cores_per_command="$2"; shift 2;;
+        --min-mem-per-command) min_mem_per_command="$2"; shift 2;;
+        --job-script) job_script="$2"; batch_mode="true"; shift 2;;
+        --job-size) job_size="$2"; shift 2;;
+        --cwd) cwd="$2"; shift 2;;
+        --no-fail-fast) no_fail="|| true"; no_fail_parallel="--halt never || true" ; shift ;;
         --ebs-mount)
-            IFS=',' read -ra mount_pairs <<< "$2" # Split input by commas
-            for pair in "${mount_pairs[@]}"; do
-                if [[ "$pair" == *=* ]]; then
-                    IFS='=' read -r dir size <<< "$pair"
-                    if [[ -n "$dir" && -n "$size" ]]; then
-                        ebs_mount+=("$dir")
-                        ebs_mount_size+=("$size")
-                    fi
-                fi
-            done
             shift
+            while [ $# -gt 0 ] && [[ $1 != -* ]]; do
+                IFS='=' read -ra PARTS <<< "$1"
+                ebs_mount+=("${PARTS[0]}") 
+                ebs_mount_size+=("${PARTS[1]}")
+                shift
+            done
             ;;
         --download-include)
-            IFS=',' read -ra INCLUDE <<< "$2"
-            for include in "${INCLUDE[@]}"; do
-                download_include+=("${include[0]}")
-            done
             shift
-            ;;
-        --env)
-            IFS=',' read -ra envs <<< "$2"
-            for variables in "${envs[@]}"; do
-                env_variables+=("${variables[0]}")
+                while [ $# -gt 0 ] && [[ $1 != -* ]]; do
+                IFS='' read -ra INCLUDE <<< "$1"
+                download_include+=("${INCLUDE[0]}")
+                shift
             done
-            shift
             ;;
         --mount|--download|--upload)
             current_flag="$1"
-            IFS=',' read -ra PARTS <<< "$2"
-            for pair in "${PARTS[@]}"; do
-                if [[ "$pair" == *:* ]]; then
-                    IFS=':' read -r source dest <<< "$pair"
-                    if [ "$current_flag" == "--mount" ]; then
-                        mount_remote+=("$source")
-                        mount_local+=("$dest")
-                    elif [ "$current_flag" == "--download" ]; then
-                        download_remote+=("$source")
-                        download_local+=("$dest")
-                    elif [ "$current_flag" == "--upload" ]; then
-                        upload_remote+=("$dest")
-                        upload_local+=("$source")
-                    fi
-                fi
-            done
             shift
+            while [ $# -gt 0 ] && [[ $1 != -* ]]; do
+                IFS=':' read -ra PARTS <<< "$1"
+                if [ "$current_flag" == "--mount" ]; then
+                mount_local+=("${PARTS[1]}")
+                mount_remote+=("${PARTS[0]}")
+                elif [ "$current_flag" == "--download" ]; then
+                download_remote+=("${PARTS[0]}")
+                download_local+=("${PARTS[1]}")
+                elif [ "$current_flag" == "--upload" ]; then
+                upload_local+=("${PARTS[0]}")
+                upload_remote+=("${PARTS[1]}")
+                fi
+                shift
+            done
             ;;
         --mountOpt)
-            IFS=',' read -ra MOUNT <<< "$2"
-            for mount in "${MOUNT[@]}"; do
-                mountOpt+=("$mount")
-            done
             shift
+            while [ $# -gt 0 ] && [[ $1 != -* ]]; do
+                IFS='' read -ra MOUNT <<< "$1"
+                mountOpt+=("${MOUNT[0]}")
+                shift
+            done
             ;;
         -*|--*=)  # Unsupported flags
             extra_parameters+=("$1")  # Add the unsupported flag to extra_parameters
@@ -214,19 +202,14 @@ while (( "$#" )); do
             # We expect the user to understand float cli commands if using this option
             # Therefore, all unsupported flags will be added to the end of the float command as they are
             # Add all subsequent arguments until the next flag to extra_parameters
-            while [ $# -gt 0 ]; do
+            while [ $# -gt 0 ] && ! [[ "$1" =~ ^- ]]; do
                 extra_parameters+=("$1")
-                if ! [[ "$2" =~ ^- ]]; then
-                    shift
-                else
-                    break
-                fi
+                shift
             done
             ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown parameter passed: $1"; usage; exit 1 ;;
     esac
-    shift
 done
 
 # Check required parameters are given
@@ -824,11 +807,6 @@ EOF
             full_cmd+=" --env MODE=oem_packages"
         fi
 
-        # Additional env variables
-        for variables in "${env_variables[@]}"; do
-            full_cmd+=" --env $variables"
-        done
-
         # Added extra parameters if given
         for param in "${extra_parameters[@]}"; do
           full_cmd+=" $param"
@@ -1056,13 +1034,6 @@ float_parameter_checks() {
             "--env" "SUSPEND_FEATURE=false"
         )
     fi
-
-    # Additional env variables
-    for variables in "${env_variables[@]}"; do
-        float_submit_interactive_args+=(
-            "--env" "$variables"
-        )
-    done
 
     # Added extra parameters if given
     for param in "${extra_parameters[@]}"; do
