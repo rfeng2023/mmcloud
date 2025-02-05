@@ -6,7 +6,9 @@ gateway=g-sidlpgb7oi9p48kxycpmn
 efs_ip=10.1.10.210
 security_group=sg-02867677e76635b25
 initial_mount="statfungen/ftp_fgc_xqtl/:/data"
+annotation_mount="statfungen/ftp_fgc_xqtl/interactive_analysis/rf2872/resource/annotation_files/:/annotation_files"
 initial_mountOpt="mode=r"
+annotation_mountOpt="mode=rw"
 ######################################################################
 
 # Find parent directory of mm_jobman.sh
@@ -22,4 +24,4 @@ find_script_dir() {
 }
 
 script_dir=$(find_script_dir)
-$script_dir/mm_jobman.sh -o $opcenter -g $gateway -efs $efs_ip -sg $security_group --mount $initial_mount --mountOpt $initial_mountOpt "$@"
+$script_dir/mm_jobman.sh -o $opcenter -g $gateway -efs $efs_ip -sg $security_group --mount $initial_mount $annotation_mount --mountOpt $initial_mountOpt $annotation_mountOpt "$@"
