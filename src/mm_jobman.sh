@@ -663,17 +663,23 @@ submit_each_line_with_float() {
         # Can access user and shared packages
         directory_setup+="ln -sf /mnt/efs/$user/.pixi /home/\${vm_username}/.pixi\n"
         directory_setup+="export PATH=\"\${HOME}/.pixi/bin:/mnt/efs/shared/.pixi/bin:\${PATH}\"\n"
-    elif [[ $mount_packages == true ]]; then
-        # Only user packages
-        directory_setup+="ln -sf /mnt/efs/$user/.pixi /home/\${vm_username}/.pixi\n"
-        directory_setup+="export PATH=\"\${HOME}/.pixi/bin:\${PATH}\"\n"
-    elif [[ $oem_packages == true ]]; then
-        # Only shared packages
-        directory_setup+="export PATH=\"\${HOME}/.pixi/bin:/mnt/efs/shared/.pixi/bin:\${PATH}\"\n"
         directory_setup+="mkdir -p \${HOME}/.local/lib/python3.12/site-packages\n"
         directory_setup+="mkdir -p \${HOME}/.pixi/envs/python/lib/R/etc\n"
         directory_setup+="export PYTHONPATH=\"\${HOME}/.pixi/envs/python/lib/python3.12/site-packages:/mnt/efs/shared/.pixi/envs/python/lib/python3.12/site-packages\"\n"
         directory_setup+="export R_LIBS_USER=\"\${HOME}/.pixi/envs/r-base/lib/R/library:/mnt/efs/shared/.pixi/envs/r-base/lib/R/library\"\n"
+    elif [[ $mount_packages == true ]]; then
+        # Only user packages
+        directory_setup+="ln -sf /mnt/efs/$user/.pixi /home/\${vm_username}/.pixi\n"
+        directory_setup+="export PATH=\"\${HOME}/.pixi/bin:\${PATH}\"\n"
+        directory_setup+="mkdir -p \${HOME}/.local/lib/python3.12/site-packages\n"
+        directory_setup+="mkdir -p \${HOME}/.pixi/envs/python/lib/R/etc\n"
+        directory_setup+="export PYTHONPATH=\"\${HOME}/.pixi/envs/python/lib/python3.12/site-packages\"\n"
+        directory_setup+="export R_LIBS_USER=\"\${HOME}/.pixi/envs/r-base/lib/R/library\"\n"
+    elif [[ $oem_packages == true ]]; then
+        # Only shared packages
+        directory_setup+="export PATH=\"/mnt/efs/shared/.pixi/bin:\${PATH}\"\n"
+        directory_setup+="export PYTHONPATH=\"/mnt/efs/shared/.pixi/envs/python/lib/python3.12/site-packages\"\n"
+        directory_setup+="export R_LIBS_USER=\"/mnt/efs/shared/.pixi/envs/r-base/lib/R/library\"\n"
     fi
 
     # Loop to create job submission commands
