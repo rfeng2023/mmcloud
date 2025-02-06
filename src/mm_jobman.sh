@@ -671,16 +671,9 @@ submit_each_line_with_float() {
         # Only shared packages
         directory_setup+="export PATH=\"\${HOME}/.pixi/bin:/mnt/efs/shared/.pixi/bin:\${PATH}\"\n"
         directory_setup+="mkdir -p \${HOME}/.local/lib/python3.12/site-packages\n"
-        directory_setup+="tee \${HOME}/.local/lib/python3.12/site-packages/sitecustomize.py << 'EOF'\n"
-        directory_setup+="import sys\n"
-        directory_setup+="sys.path[0:0] = [\n"
-        directory_setup+="   \"\${HOME}/.pixi/envs/python/lib/python3.12/site-packages\",\n"
-        directory_setup+="   \"/mnt/efs/shared/.pixi/envs/python/lib/python3.12/site-packages\"\n"
-        directory_setup+="]\n"
-        directory_setup+="EOF\n"
-        directory_setup+="echo \".libPaths(c('\${HOME}/.pixi/envs/r-base/lib/R/library', '/mnt/efs/shared/.pixi/envs/r-base/lib/R/library'))\" >> \${HOME}/.Rprofile\n"
         directory_setup+="mkdir -p \${HOME}/.pixi/envs/python/lib/R/etc\n"
-        directory_setup+="echo \".libPaths('\${HOME}/.pixi/envs/r-base/lib/R/library')\" >> \${HOME}/.pixi/envs/python/lib/R/etc/Rprofile.site\n"
+        directory_setup+="export PYTHONPATH=\"\${HOME}/.pixi/envs/python/lib/python3.12/site-packages:/mnt/efs/shared/.pixi/envs/python/lib/python3.12/site-packages\"\n"
+        directory_setup+="export R_LIBS_USER=\"\${HOME}/.pixi/envs/r-base/lib/R/library:/mnt/efs/shared/.pixi/envs/r-base/lib/R/library\"\n"
     fi
 
     # Loop to create job submission commands
