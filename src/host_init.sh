@@ -16,9 +16,9 @@ sudo mkdir -p /mnt/efs
 sudo chmod 777 /mnt/efs
 if [[ ${MODE} == "oem_packages" ]]; then
     echo "Mode set to oem_packages. Setting EFS to read-only."
-    sudo mount -t nfs4 -r -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport $EFS:/ /mnt/efs
+    sudo mount -t lustre -r -o relatime,flock $EFS /mnt/efs
 else
-    sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport $EFS:/ /mnt/efs
+    sudo mount -t lustre -o relatime,flock $EFS /mnt/efs
 fi
 
 # Make sure it is mounted before end script
