@@ -641,11 +641,11 @@ submit_each_line_with_float() {
     # Determine VM Policy
     # In batch mode, vmPolicy is spotOnly by default - variable is empty initially
     if [[ -z $vm_policy ]]; then
-        vm_policy_command="[spotOnly=true]"
+        vm_policy_command="[spotOnly=true,retryInterval=900s]"
     else
         local lowercase_vm_policy=$(echo "$vm_policy" | tr '[:upper:]' '[:lower:]')
         if [ $lowercase_vm_policy == "spotonly" ]; then
-            vm_policy_command="[spotOnly=true]"
+            vm_policy_command="[spotOnly=true,retryInterval=900s]"
         elif [ $lowercase_vm_policy == "ondemand" ]; then
             vm_policy_command="[onDemand=true]"
         elif [ $lowercase_vm_policy == "spotfirst" ]; then

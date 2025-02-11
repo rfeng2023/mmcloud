@@ -20,4 +20,4 @@ find_script_dir() {
 }
 
 script_dir=$(find_script_dir)
-$script_dir/mm_jobman.sh -o $opcenter -g $gateway -efs $efs_ip -sg $security_group --vmPolicy [spotOnly=true,retryInterval=900s] "$@"
+$script_dir/mm_jobman.sh -o $opcenter -g $gateway -efs $efs_ip -sg $security_group --vmPolicy spotOnly "$@"
