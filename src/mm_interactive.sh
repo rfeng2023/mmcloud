@@ -3,7 +3,7 @@
 ## INTERACTIVE DEFAULTS -- PLEASE CHANGE DEFAULTS HERE IF NECESSARY ##
 opcenter=44.222.241.133
 gateway=g-sidlpgb7oi9p48kxycpmn
-efs_ip=fs-06745c4036455feee.efs.us-east-1.amazonaws.com
+efs_ip=fs-0e43817652b4ed69f.fsx.us-east-1.amazonaws.com@tcp:/csbjpb4v
 security_group=sg-02867677e76635b25
 initial_mount="statfungen/ftp_fgc_xqtl/:/data"
 annotation_mount="statfungen/ftp_fgc_xqtl/interactive_analysis/rf2872/resource/annotation_files/:/annotation_files"
