@@ -287,17 +287,36 @@ check_required_params() {
     fi
 }
 
-# Prompt for user and password if not provided
+# If it is an interactive job, prompt for user and password if not provided
+# If it is a batch job, will check if   
 login() {
     echo ""
-    if [[ -z "$user" ]]; then
-        read -p "Enter user for $opcenter: " user
+
+    # For batch job
+    if [[ "$batch_mode" == "true" ]]; then
+        local output=$($float_executable login --info)
+        local address=$(echo "$output" | grep -o 'address: [0-9.]*' | awk '{print $2}')
+        if [ "$address" == "" ];then
+            echo -e "\n[ERROR] No opcenter logged in to. Did you log in?"
+            exit 1
+        fi
+        if [ "$opcenter" != "$address" ]; then
+            echo -e "\n[ERROR] The provided opcenter address $opcenter does not match the logged in opcenter $address. Please log in to $opcenter."
+            exit 1
+        fi
     fi
-    if [[ -z "$password" ]]; then
-        read -sp "Enter password for $opcenter: " password
-        echo ""
+
+    # For interactive job
+    if [[ "$interactive_mode" == "true" ]]; then
+        if [[ -z "$user" ]]; then
+            read -p "Enter user for $opcenter: " user
+        fi
+        if [[ -z "$password" ]]; then
+            read -sp "Enter password for $opcenter: " password
+            echo ""
+        fi
+        "$float_executable" login -a "$opcenter" -u "$user" -p "$password"
     fi
-    "$float_executable" login -a "$opcenter" -u "$user" -p "$password"
 
     # If error returned by login, exit the script
     if [[ "$?" != 0 ]]; then
