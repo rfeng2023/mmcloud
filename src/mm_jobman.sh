@@ -304,6 +304,8 @@ login() {
             echo -e "\n[ERROR] The provided opcenter address $opcenter does not match the logged in opcenter $address. Please log in to $opcenter."
             exit 1
         fi
+        # If login was successful, save the float username
+        user=$(echo "$output" | grep 'username' | awk '{print $2}')
     fi
 
     # For interactive job
